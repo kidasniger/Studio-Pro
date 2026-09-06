@@ -406,8 +406,8 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
             visualizerView = new VisualizerView(this);
         }
 
-        pages.add(createPlayerPage());
-        pages.add(createLibraryPage());
+        pages.add(createStudioPage());
+        pages.add(createVisualPage());
         pages.add(createLyricsPage());
         pages.add(createAudioPage());
         pages.add(createAiPage());
@@ -512,6 +512,14 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         top.addView(rightIcons);
         box.addView(top);
         return box;
+    }
+
+    private View createStudioPage() {
+        return createPlayerPage();
+    }
+
+    private View createVisualPage() {
+        return createLibraryPage();
     }
 
     private View createPlayerPage() {
