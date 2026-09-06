@@ -204,12 +204,14 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     private Button exportVisualizerToggleButton, exportLyricsToggleButton;
     private FrameLayout pageHost;
     private FrameLayout headerMusicPlayerBtn;
-    private final List<LinearLayout> pages = new ArrayList<>();
+    private final List<View> pages = new ArrayList<>();
     private ActivityResultLauncher<Intent> filePickerLauncher;
     private ActivityResultLauncher<String> audioPermissionLauncher;
     private ActivityResultLauncher<IntentSenderRequest> writeRequestLauncher;
     private AudioBrowserDialog currentAudioBrowserDialog;
     private MusicPlayerDialog currentMusicPlayerDialog;
+    private MusicPlayerDialog embeddedMusicPlayer;
+    private AudioBrowserDialog embeddedAudioBrowser;
     private Runnable pendingStoragePermissionCallback;
     private String pickPurpose = "audio";
 
@@ -351,14 +353,14 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         nav.setPadding(dp(8), dp(6), dp(8), dp(6));
 
         int[] iconDrawables = {
-            R.drawable.ic_nav_studio,
-            R.drawable.ic_nav_visual,
+            R.drawable.ic_music_note,
+            R.drawable.ic_queue_music,
             R.drawable.ic_nav_lyrics,
             R.drawable.ic_nav_audio,
             R.drawable.ic_nav_ai,
             R.drawable.ic_nav_export
         };
-        String[] labels = {"Studio", "Visuel", "Paroles", "Audio", "IA", "Export"};
+        String[] labels = {"Lecteur", "Bibliothèque", "Paroles", "Audio", "IA", "Export"};
 
         for (int i = 0; i < 6; i++) {
             final int x = i;
@@ -400,14 +402,18 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         }
         shell.addView(nav, new LinearLayout.LayoutParams(-1, dp(compact ? 56 : (largeScreen ? 66 : 62))));
 
-        pages.add(createStudioPage());
-        pages.add(createVisualPage());
+        if (visualizerView == null) {
+            visualizerView = new VisualizerView(this);
+        }
+
+        pages.add(createPlayerPage());
+        pages.add(createLibraryPage());
         pages.add(createLyricsPage());
         pages.add(createAudioPage());
         pages.add(createAiPage());
         pages.add(createExportPage());
 
-        for (LinearLayout p : pages) pageHost.addView(p, new FrameLayout.LayoutParams(-1, -1));
+        for (View p : pages) pageHost.addView(p, new FrameLayout.LayoutParams(-1, -1));
         showPage(0);
 
         // Overlay Splash Screen Studio Pro
@@ -508,583 +514,42 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         return box;
     }
 
-    private LinearLayout createStudioPage() {
-        LinearLayout page = page();
-        ScrollView s = scroll();
-        LinearLayout c = vertical();
-
-        // 1. Live Preview Card (_n : Glass Card - radius 24dp, bg_glass_card)
-        LinearLayout hero = card(0x0AFFFFFF, 0x14FFFFFF, 24);
-        hero.setPadding(dp(16), dp(16), dp(16), dp(16));
-
-        LinearLayout heroTop = row();
-        heroTop.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout heroTitles = vertical();
-        heroTitles.addView(section("NOW PLAYING — PREVIEW LIVE"));
-
-        homeTrackTitle = title(audioFile != null ? currentTrackTitle : "Midnight Signals • LØST", 18, 0xFFF5F5F7);
-        homeTrackTitle.setPadding(0, dp(3), 0, dp(1));
-        heroTitles.addView(homeTrackTitle);
-
-        TextView trackMeta = subtitle(audioFile != null ? (currentTrackArtist.isEmpty() ? "Audio importé" : currentTrackArtist) + " • 48kHz • Stereo" : "03:42 • 48kHz • Stereo");
-        heroTitles.addView(trackMeta);
-        heroTop.addView(heroTitles, new LinearLayout.LayoutParams(0, -2, 1));
-
-        // Menu More (...)
-        FrameLayout moreBtn = new FrameLayout(this);
-        moreBtn.setBackgroundResource(R.drawable.bg_chip_inactive);
-        moreBtn.setLayoutParams(new LinearLayout.LayoutParams(dp(28), dp(28)));
-        TextView moreTxt = title("•••", 10, 0x99FFFFFF);
-        moreBtn.addView(moreTxt, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        heroTop.addView(moreBtn);
-
-        hero.addView(heroTop);
-        hero.addView(gap(14));
-
-        // Visualizer View Container (bg: rgba(0,0,0,0.40), border: rgba(255,255,255,0.06), radius: 16dp)
-        FrameLayout vpWrap = new FrameLayout(this);
-        shape(vpWrap, 0x66000000, dp(16), 0x0FFFFFFF);
-        vpWrap.setPadding(dp(6), dp(6), dp(6), dp(6));
-
-        visualizerView = new VisualizerView(this);
-        vpWrap.addView(visualizerView, new FrameLayout.LayoutParams(-1, dp(140)));
-
-        // Live overlay timestamps (00:00 - LIVE PREVIEW • 60FPS - 03:42)
-        LinearLayout timeOverlay = row();
-        timeOverlay.setPadding(dp(10), 0, dp(10), dp(8));
-        TextView tStart = subtitle("00:00");
-        tStart.setTextSize(10);
-        tStart.setTextColor(0x66FFFFFF);
-        timeOverlay.addView(tStart);
-
-        TextView tMid = subtitle("LIVE PREVIEW • 60FPS");
-        tMid.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
-        tMid.setGravity(Gravity.CENTER);
-        tMid.setTextSize(10);
-        tMid.setTextColor(0x66FFFFFF);
-        timeOverlay.addView(tMid);
-
-        homeTrackTime = subtitle("03:42");
-        homeTrackTime.setTextSize(10);
-        homeTrackTime.setTextColor(0x66FFFFFF);
-        timeOverlay.addView(homeTrackTime);
-
-        FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        vpWrap.addView(timeOverlay, topLp);
-
-        hero.addView(vpWrap);
-        hero.addView(gap(12));
-
-        // Playback & Pulse Controls
-        LinearLayout ctl = row();
-        ctl.setGravity(Gravity.CENTER);
-        playButton = accent(" Lecture");
-        playButton.setOnClickListener(v -> togglePlayback());
-        ctl.addView(playButton, new LinearLayout.LayoutParams(0, dp(48), 1));
-
-        Button beatBtn = secondary(beatShakeEnabled ? "Beat Pulse : Actif" : "Beat Pulse : Inactif");
-        beatBtn.setOnClickListener(v -> {
-            beatShakeEnabled = !beatShakeEnabled;
-            beatBtn.setText(beatShakeEnabled ? "Beat Pulse : Actif" : "Beat Pulse : Inactif");
-            visualizerView.invalidate();
-            saveSession();
-        });
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(48), 1);
-        bp.leftMargin = dp(8);
-        ctl.addView(beatBtn, bp);
-        hero.addView(ctl);
-        c.addView(hero);
-        c.addView(gap(14));
-
-        // 2. Quick Access Grid (2x2)
-        c.addView(section("ACCÈS RAPIDE STUDIO"));
-        c.addView(gap(10));
-
-        LinearLayout gridRow1 = row();
-        LinearLayout cardNew = createQuickCard("Nouveau projet", "Importer audio", R.drawable.ic_nav_studio, true, v -> openAudioBrowser());
-        gridRow1.addView(cardNew, new LinearLayout.LayoutParams(0, -2, 1));
-
-        LinearLayout cardLib = createQuickCard("Gestionnaire Audio", "Écouter & Importer", R.drawable.ic_nav_audio, false, v -> openAudioBrowser());
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, -2, 1);
-        clp.leftMargin = dp(10);
-        gridRow1.addView(cardLib, clp);
-        c.addView(gridRow1);
-        c.addView(gap(10));
-
-        LinearLayout gridRow2 = row();
-        LinearLayout cardPresets = createQuickCard("Presets", "9 styles", R.drawable.ic_nav_visual, false, v -> showPage(1));
-        gridRow2.addView(cardPresets, new LinearLayout.LayoutParams(0, -2, 1));
-
-        LinearLayout cardHist = createQuickCard("Historique", "Derniers exports", R.drawable.ic_nav_export, false, v -> showPage(5));
-        LinearLayout.LayoutParams chlp = new LinearLayout.LayoutParams(0, -2, 1);
-        chlp.leftMargin = dp(10);
-        gridRow2.addView(cardHist, chlp);
-        c.addView(gridRow2);
-        c.addView(gap(20));
-
-        // 3. AI Features Section ("Fonctions IA")
-        LinearLayout aiHead = row();
-        aiHead.addView(section("FONCTIONS IA"), new LinearLayout.LayoutParams(0, -2, 1));
-        ImageView aiChevron = new ImageView(this);
-        aiChevron.setImageResource(R.drawable.ic_nav_ai);
-        aiChevron.setColorFilter(0x4DFFFFFF); // 30% blanc
-        aiHead.addView(aiChevron, new LinearLayout.LayoutParams(dp(16), dp(16)));
-        c.addView(aiHead);
-        c.addView(gap(10));
-
-        HorizontalScrollView aiScroll = new HorizontalScrollView(this);
-        aiScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout aiCards = row();
-
-        // Carte Transcription (Whisper)
-        LinearLayout cardWhisper = card(0x0AFFFFFF, 0x14FFFFFF, 20);
-        cardWhisper.setPadding(dp(16), dp(16), dp(16), dp(16));
-        cardWhisper.setOnClickListener(v -> {
-            showPage(4);
-            transcribeFromChat();
-        });
-
-        LinearLayout cwRow = row();
-        FrameLayout cwIconWrap = new FrameLayout(this);
-        cwIconWrap.setBackgroundResource(R.drawable.bg_chip_active);
-        ImageView cwIcon = new ImageView(this);
-        cwIcon.setImageResource(R.drawable.ic_nav_ai);
-        cwIcon.setColorFilter(Color.WHITE);
-        cwIconWrap.addView(cwIcon, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
-        cwRow.addView(cwIconWrap, new LinearLayout.LayoutParams(dp(40), dp(40)));
-
-        LinearLayout cwTexts = vertical();
-        cwTexts.setPadding(dp(12), 0, 0, 0);
-        cwTexts.addView(title("Transcription", 14, Color.WHITE));
-        TextView cwSub = subtitle("Paroles auto via Whisper");
-        cwSub.setPadding(0, dp(2), 0, dp(6));
-        cwTexts.addView(cwSub);
-
-        // Badge discret "IA active"
-        LinearLayout cwBadge = row();
-        cwBadge.setBackgroundResource(R.drawable.bg_badge_ia);
-        cwBadge.setPadding(dp(10), dp(4), dp(10), dp(4));
-        View cwDot = new View(this);
-        shape(cwDot, 0xFF22D3EE, dp(3), 0);
-        cwBadge.addView(cwDot, new LinearLayout.LayoutParams(dp(6), dp(6)));
-        TextView cwBadgeTxt = title("IA ACTIVE", 10, 0xFF22D3EE);
-        cwBadgeTxt.setLetterSpacing(0.1f);
-        cwBadgeTxt.setPadding(dp(6), 0, 0, 0);
-        cwBadge.addView(cwBadgeTxt);
-        cwTexts.addView(cwBadge, new LinearLayout.LayoutParams(-2, -2));
-
-        cwRow.addView(cwTexts, new LinearLayout.LayoutParams(0, -2, 1));
-        cardWhisper.addView(cwRow);
-        aiCards.addView(cardWhisper, new LinearLayout.LayoutParams(dp(240), -2));
-        aiCards.addView(gapW(12));
-
-        // Carte Micro Live IA
-        LinearLayout cardRecLive = card(0x0AFFFFFF, 0x14FFFFFF, 20);
-        cardRecLive.setPadding(dp(16), dp(16), dp(16), dp(16));
-        cardRecLive.setOnClickListener(v -> openVoiceRecorderModal());
-
-        LinearLayout crRow = row();
-        FrameLayout crIconWrap = new FrameLayout(this);
-        crIconWrap.setBackgroundResource(R.drawable.bg_chip_active);
-        ImageView crIcon = new ImageView(this);
-        crIcon.setImageResource(R.drawable.ic_mic);
-        crIcon.setColorFilter(0xFF22D3EE);
-        crIconWrap.addView(crIcon, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
-        crRow.addView(crIconWrap, new LinearLayout.LayoutParams(dp(40), dp(40)));
-
-        LinearLayout crTexts = vertical();
-        crTexts.setPadding(dp(12), 0, 0, 0);
-        crTexts.addView(title("Micro & Live IA", 14, Color.WHITE));
-        TextView crSub = subtitle("Enregistre & transcris en direct");
-        crSub.setPadding(0, dp(2), 0, dp(6));
-        crTexts.addView(crSub);
-
-        LinearLayout crBadge = row();
-        crBadge.setBackgroundResource(R.drawable.bg_badge_ia);
-        crBadge.setPadding(dp(10), dp(4), dp(10), dp(4));
-        View crDot = new View(this);
-        shape(crDot, 0xFFA855F7, dp(3), 0);
-        crBadge.addView(crDot, new LinearLayout.LayoutParams(dp(6), dp(6)));
-        TextView crBadgeTxt = title("WHISPER IA", 10, 0xFFA855F7);
-        crBadgeTxt.setLetterSpacing(0.1f);
-        crBadgeTxt.setPadding(dp(6), 0, 0, 0);
-        crBadge.addView(crBadgeTxt);
-        crTexts.addView(crBadge, new LinearLayout.LayoutParams(-2, -2));
-
-        crRow.addView(crTexts, new LinearLayout.LayoutParams(0, -2, 1));
-        cardRecLive.addView(crRow);
-        aiCards.addView(cardRecLive, new LinearLayout.LayoutParams(dp(240), -2));
-        aiCards.addView(gapW(12));
-
-        // Carte Citation IA
-        LinearLayout cardQuote = card(0x0AFFFFFF, 0x14FFFFFF, 20);
-        cardQuote.setPadding(dp(16), dp(16), dp(16), dp(16));
-        cardQuote.setOnClickListener(v -> {
-            showPage(4);
-            generateQuoteDialog();
-        });
-
-        LinearLayout cqRow = row();
-        FrameLayout cqIconWrap = new FrameLayout(this);
-        cqIconWrap.setBackgroundResource(R.drawable.bg_chip_active);
-        ImageView cqIcon = new ImageView(this);
-        cqIcon.setImageResource(R.drawable.ic_nav_lyrics);
-        cqIcon.setColorFilter(Color.WHITE);
-        cqIconWrap.addView(cqIcon, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
-        cqRow.addView(cqIconWrap, new LinearLayout.LayoutParams(dp(40), dp(40)));
-
-        LinearLayout cqTexts = vertical();
-        cqTexts.setPadding(dp(12), 0, 0, 0);
-        cqTexts.addView(title("Citation IA", 14, Color.WHITE));
-        TextView cqSub = subtitle("Génère hook viral depuis lyrics");
-        cqSub.setPadding(0, dp(2), 0, dp(6));
-        cqTexts.addView(cqSub);
-
-        LinearLayout cqBadge = row();
-        cqBadge.setBackgroundResource(R.drawable.bg_badge_ia);
-        cqBadge.setPadding(dp(10), dp(4), dp(10), dp(4));
-        View cqDot = new View(this);
-        shape(cqDot, 0xFF22D3EE, dp(3), 0);
-        cqBadge.addView(cqDot, new LinearLayout.LayoutParams(dp(6), dp(6)));
-        TextView cqBadgeTxt = title("IA ACTIVE", 10, 0xFF22D3EE);
-        cqBadgeTxt.setLetterSpacing(0.1f);
-        cqBadgeTxt.setPadding(dp(6), 0, 0, 0);
-        cqBadge.addView(cqBadgeTxt);
-        cqTexts.addView(cqBadge, new LinearLayout.LayoutParams(-2, -2));
-
-        cqRow.addView(cqTexts, new LinearLayout.LayoutParams(0, -2, 1));
-        cardQuote.addView(cqRow);
-        aiCards.addView(cardQuote, new LinearLayout.LayoutParams(dp(240), -2));
-
-        aiScroll.addView(aiCards);
-        c.addView(aiScroll);
-        c.addView(gap(16));
-
-        s.addView(c);
-        page.addView(s);
-        return page;
-    }
-
-    private LinearLayout createQuickCard(String t, String sub, int iconRes, boolean primaryIcon, View.OnClickListener onClick) {
-        LinearLayout l = card(0x0AFFFFFF, 0x14FFFFFF, 24);
-        l.setPadding(dp(16), dp(16), dp(16), dp(16));
-        l.setOnClickListener(onClick);
-
-        FrameLayout iconWrap = new FrameLayout(this);
-        if (primaryIcon) {
-            iconWrap.setBackgroundResource(R.drawable.btn_gradient);
-        } else {
-            shape(iconWrap, 0x0FFFFFFF, dp(12), 0);
-        }
-        ImageView ic = new ImageView(this);
-        ic.setImageResource(iconRes);
-        ic.setColorFilter(primaryIcon ? Color.WHITE : 0xB3FFFFFF);
-        iconWrap.addView(ic, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
-        l.addView(iconWrap, new LinearLayout.LayoutParams(dp(40), dp(40)));
-        l.addView(gap(10));
-
-        l.addView(title(t, 14, 0xFFF5F5F7));
-        TextView st = subtitle(sub);
-        st.setTextSize(12);
-        st.setTextColor(0xFF9CA3AF);
-        l.addView(st);
-        return l;
-    }
-
-    private LinearLayout createVisualPage() {
-        LinearLayout page = page();
-        ScrollView s = scroll();
-        LinearLayout c = vertical();
-
-        // 1. En-tête de la page
-        LinearLayout vHead = row();
-        vHead.addView(title("Visuel", 16, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
-        vHead.addView(badge("9 PRESETS • GPU", 0x14FFFFFF, 0xFF9CA3AF, false));
-        c.addView(vHead);
-        c.addView(gap(12));
-
-        // 2. Grand aperçu animé (h-320px, rounded-24px, border-white/0.08, bg-black)
-        LinearLayout previewCard = card(0xFF000000, 0x14FFFFFF, 24);
-        previewCard.setPadding(dp(12), dp(12), dp(12), dp(12));
-
-        visualPagePreview = new VisualizerView(this);
-        previewCard.addView(visualPagePreview, new LinearLayout.LayoutParams(-1, dp(360)));
-
-        LinearLayout previewMeta = row();
-        previewMeta.setPadding(dp(4), dp(8), dp(4), dp(4));
-        visualPageTitle = title(getStyleDisplayName(style) + " • " + getColorDisplayName(activeColor), 14, 0xFFF5F5F7);
-        previewMeta.addView(visualPageTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        visualPageBgTag = badge(getBgDisplayName(backgroundMode).toUpperCase(), 0x1AFFFFFF, 0xB3FFFFFF, false);
-        previewMeta.addView(visualPageBgTag);
-        previewCard.addView(previewMeta);
-
-        c.addView(previewCard);
-        c.addView(gap(16));
-
-        LinearLayout sizeCard = card(0x0AFFFFFF, 0x14FFFFFF, 20);
-        sizeCard.setPadding(dp(14), dp(12), dp(14), dp(12));
-        sizeCard.addView(section("RÉGLAGES DU RENDU"));
-        sizeCard.addView(gap(8));
-
-        TextView visSizeLabel = subtitle("Longueur du visualiseur : " + Math.round(visualizerLengthScale * 100) + "%");
-        visSizeLabel.setTextSize(12);
-        sizeCard.addView(visSizeLabel);
-        SeekBar visSizeSeek = new SeekBar(this);
-        visSizeSeek.setMax(75);
-        visSizeSeek.setProgress(Math.max(0, Math.min(75, Math.round((visualizerLengthScale - 0.50f) * 100f))));
-        visSizeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                visualizerLengthScale = 0.50f + progress / 100f;
-                visSizeLabel.setText("Longueur du visualiseur : " + Math.round(visualizerLengthScale * 100) + "%");
-                if (visualizerView != null) visualizerView.invalidate();
-                if (visualPagePreview != null) visualPagePreview.invalidate();
-            }
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-            public void onStopTrackingTouch(SeekBar seekBar) { saveSession(); }
-        });
-        sizeCard.addView(visSizeSeek, new LinearLayout.LayoutParams(-1, dp(40)));
-
-        TextView lyrWidthLabel = subtitle("Largeur des paroles : " + Math.round(lyricsMaxWidth) + "%");
-        lyrWidthLabel.setTextSize(12);
-        lyrWidthLabel.setPadding(0, dp(6), 0, 0);
-        sizeCard.addView(lyrWidthLabel);
-        SeekBar lyrWidthSeek = new SeekBar(this);
-        lyrWidthSeek.setMax(50);
-        lyrWidthSeek.setProgress(Math.max(0, Math.min(50, Math.round(lyricsMaxWidth - 50f))));
-        lyrWidthSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                lyricsMaxWidth = 50f + progress;
-                lyrWidthLabel.setText("Largeur des paroles : " + Math.round(lyricsMaxWidth) + "%");
-                if (visualizerView != null) visualizerView.invalidate();
-                if (visualPagePreview != null) visualPagePreview.invalidate();
-            }
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-            public void onStopTrackingTouch(SeekBar seekBar) { saveSession(); }
-        });
-        sizeCard.addView(lyrWidthSeek, new LinearLayout.LayoutParams(-1, dp(40)));
-
-        TextView offsetLabel = subtitle("Position verticale des paroles : " + Math.round(textVerticalOffset * 100) + "%");
-        offsetLabel.setTextSize(12);
-        offsetLabel.setPadding(0, dp(6), 0, 0);
-        sizeCard.addView(offsetLabel);
-        SeekBar offsetSeek = new SeekBar(this);
-        offsetSeek.setMax(40);
-        offsetSeek.setProgress(Math.max(0, Math.min(40, Math.round((textVerticalOffset + 0.20f) * 100f))));
-        offsetSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                textVerticalOffset = -0.20f + progress / 100f;
-                offsetLabel.setText("Position verticale des paroles : " + Math.round(textVerticalOffset * 100) + "%");
-                if (visualizerView != null) visualizerView.invalidate();
-                if (visualPagePreview != null) visualPagePreview.invalidate();
-            }
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-            public void onStopTrackingTouch(SeekBar seekBar) { saveSession(); }
-        });
-        sizeCard.addView(offsetSeek, new LinearLayout.LayoutParams(-1, dp(40)));
-                c.addView(sizeCard);
-        c.addView(gap(16));
-
-        // 3. Grille des 9 vignettes de style (aspect-square, rounded-16px, 3 colonnes)
-        c.addView(section("SÉLECTION STYLE"));
-        c.addView(gap(10));
-
-        String[] names = {"Barres", "Miroir", "Vague", "Cercle", "Particules", "Glow Néon", "3D Cubes", "Halo", "Cyber"};
-        String[] vals = {"bars", "mirror", "wave", "circle", "particles", "glow", "cube", "halo", "cyber"};
-        int[] icons = {
-            R.drawable.ic_nav_visual,
-            R.drawable.ic_nav_studio,
-            R.drawable.ic_nav_visual,
-            R.drawable.ic_nav_audio,
-            R.drawable.ic_nav_ai,
-            R.drawable.ic_nav_studio,
-            R.drawable.ic_nav_visual,
-            R.drawable.ic_nav_studio,
-            R.drawable.ic_nav_export
-        };
-
-        visualStyleCards.clear();
-        visualStyleButtons.clear();
-
-        for (int r = 0; r < 3; r++) {
-            LinearLayout rowStyles = row();
-            for (int col = 0; col < 3; col++) {
-                int idx = r * 3 + col;
-                final int x = idx;
-                boolean active = style.equals(vals[x]);
-
-                // Vignette style card (aspect ratio square approx 96dp)
-                LinearLayout styleCard = vertical();
-                styleCard.setGravity(Gravity.CENTER);
-                styleCard.setPadding(dp(6), dp(10), dp(6), dp(8));
-                if (active) {
-                    styleCard.setBackgroundResource(R.drawable.bg_style_card_selected);
-                } else {
-                    styleCard.setBackgroundResource(R.drawable.bg_style_card_unselected);
+    private View createPlayerPage() {
+        if (embeddedMusicPlayer == null) {
+            embeddedMusicPlayer = new MusicPlayerDialog(this);
+            embeddedMusicPlayer.setOnOpenLyricsListener(this::openFullScreenLyrics);
+            embeddedMusicPlayer.setOnLyricsUpdatedListener(newLyrics -> {
+                this.lyricsList.clear();
+                if (newLyrics != null) {
+                    this.lyricsList.addAll(newLyrics);
                 }
-
-                // Mini preview bars container
-                LinearLayout miniBars = row();
-                miniBars.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-                int[] barH = {14, 22, 32, 26, 18};
-                for (int bIdx = 0; bIdx < 5; bIdx++) {
-                    View bar = new View(this);
-                    shape(bar, active ? 0xFFA855F7 : 0x4DFFFFFF, dp(2), 0);
-                    LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(3), dp(barH[bIdx]));
-                    if (bIdx > 0) blp.leftMargin = dp(3);
-                    miniBars.addView(bar, blp);
+                if (lyricsPreviewText != null) {
+                    lyricsPreviewText.setText(lyricsList.size() + " paroles synchronisées");
                 }
-                styleCard.addView(miniBars, new LinearLayout.LayoutParams(-1, dp(34)));
-                styleCard.addView(gap(6));
-
-                TextView lbl = new TextView(this);
-                lbl.setText(names[x]);
-                lbl.setTextSize(11);
-                lbl.setGravity(Gravity.CENTER);
-                lbl.setTextColor(active ? Color.WHITE : 0xCCFFFFFF);
-                lbl.setTypeface(Typeface.create("sans-serif", active ? Typeface.BOLD : Typeface.NORMAL));
-                styleCard.addView(lbl);
-
-                visualStyleCards.add(styleCard);
-
-                styleCard.setOnClickListener(v -> updateStyleSelection(vals[x]));
-
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(86), 1);
-                if (col > 0) lp.leftMargin = dp(8);
-                rowStyles.addView(styleCard, lp);
-            }
-            c.addView(rowStyles);
-            if (r < 2) c.addView(gap(8));
-        }
-        c.addView(gap(16));
-
-        // 4. Couleur Accent (Cyan, Violet, Rose, Vert)
-        c.addView(section("COULEUR ACCENT"));
-        c.addView(gap(8));
-
-        HorizontalScrollView cs = new HorizontalScrollView(this);
-        cs.setHorizontalScrollBarEnabled(false);
-        LinearLayout colorsRow = row();
-        colorChipContainers.clear();
-        colorChipTexts.clear();
-        colorButtons.clear();
-
-        String[] colorCodes = {"#22D3EE", "#A855F7", "#EC4899", "#22C55E"};
-        String[] colorNames = {"cyan", "violet", "rose", "vert"};
-
-        for (int i = 0; i < colorCodes.length; i++) {
-            final String colCode = colorCodes[i];
-            final String colName = colorNames[i];
-            boolean sel = colCode.equalsIgnoreCase(activeColor) || colName.equalsIgnoreCase(activeColor);
-
-            LinearLayout chip = row();
-            chip.setGravity(Gravity.CENTER_VERTICAL);
-            chip.setPadding(dp(14), dp(8), dp(14), dp(8));
-            if (sel) {
-                chip.setBackgroundResource(R.drawable.bg_chip_active);
-            } else {
-                chip.setBackgroundResource(R.drawable.bg_chip_inactive);
-            }
-
-            View dot = new View(this);
-            shape(dot, Color.parseColor(colCode), dp(6), 0);
-            chip.addView(dot, new LinearLayout.LayoutParams(dp(10), dp(10)));
-
-            TextView txt = new TextView(this);
-            txt.setText(" " + colName.substring(0, 1).toUpperCase() + colName.substring(1));
-            txt.setTextSize(12);
-            txt.setTextColor(sel ? Color.WHITE : 0x80FFFFFF);
-            txt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-            chip.addView(txt);
-
-            colorChipContainers.add(chip);
-            colorChipTexts.add(txt);
-
-            chip.setOnClickListener(v -> updateColorSelection(colCode));
-
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(38));
-            if (i > 0) p.leftMargin = dp(8);
-            colorsRow.addView(chip, p);
-        }
-        cs.addView(colorsRow);
-        c.addView(cs);
-        c.addView(gap(16));
-
-        // 5. Fond (Noir, Dégradé animé, Radial pulsé, Image)
-        c.addView(section("FOND"));
-        c.addView(gap(8));
-
-        HorizontalScrollView bgScroll = new HorizontalScrollView(this);
-        bgScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout bgRow = row();
-        bgChipButtons.clear();
-
-        String[] bgLabels = {"Noir", "Dégradé animé", "Radial pulsé", "Image"};
-        String[] bgModes = {"dark", "gradient", "radial", "image"};
-
-        for (int i = 0; i < bgLabels.length; i++) {
-            final String modeVal = bgModes[i];
-            final String modeLabel = bgLabels[i];
-            boolean sel = backgroundMode.equals(modeVal);
-
-            Button chipBtn = new Button(this);
-            chipBtn.setText(modeLabel);
-            chipBtn.setTextSize(13);
-            chipBtn.setAllCaps(false);
-            chipBtn.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-            chipBtn.setTextColor(sel ? Color.WHITE : 0xFF9CA3AF);
-            chipBtn.setPadding(dp(16), dp(8), dp(16), dp(8));
-            chipBtn.setMinHeight(0);
-            chipBtn.setMinimumHeight(0);
-            if (sel) {
-                chipBtn.setBackgroundResource(R.drawable.bg_chip_active);
-            } else {
-                chipBtn.setBackgroundResource(R.drawable.bg_chip_inactive);
-            }
-
-            chipBtn.setOnClickListener(v -> {
-                if ("image".equals(modeVal)) {
-                    pickPurpose = "background";
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                        intent.setType("image/*");
-                        intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                        filePickerLauncher.launch(Intent.createChooser(intent, "Choisir une image"));
-                    } catch (Exception e1) {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                            intent.setType("image/*");
-                            intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                            filePickerLauncher.launch(intent);
-                        } catch (Exception ignored) {}
-                    }
-                } else {
-                    updateBgSelection(modeVal);
-                }
+                updateKaraokeLinesView();
+                if (visualizerView != null) visualizerView.invalidate();
             });
-
-            bgChipButtons.add(chipBtn);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(38));
-            if (i > 0) lp.leftMargin = dp(8);
-            bgRow.addView(chipBtn, lp);
+            this.currentMusicPlayerDialog = embeddedMusicPlayer;
         }
-        bgScroll.addView(bgRow);
-        c.addView(bgScroll);
-        c.addView(gap(20));
+        return embeddedMusicPlayer.getPageView();
+    }
 
-        // 6. Bouton Appliquer (Primary gradient button fixed)
-        Button btnApply = accent("Appliquer");
-        btnApply.setOnClickListener(v -> {
-            showPage(0);
-            Toast.makeText(this, "Style " + getStyleDisplayName(style) + " appliqué", Toast.LENGTH_SHORT).show();
-        });
-        c.addView(btnApply, new LinearLayout.LayoutParams(-1, dp(50)));
-        c.addView(gap(12));
-
-        s.addView(c);
-        page.addView(s);
-        return page;
+    private View createLibraryPage() {
+        if (embeddedAudioBrowser == null) {
+            embeddedAudioBrowser = new AudioBrowserDialog(this, () -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    audioPermissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO);
+                } else {
+                    audioPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
+                }
+            }, (uri, title, artist, durationMs) -> {
+                loadAudio(uri);
+                showStatus("Morceau importé : " + title);
+                Toast.makeText(this, "Audio '" + title + "' importé avec succès !", Toast.LENGTH_SHORT).show();
+            });
+            this.currentAudioBrowserDialog = embeddedAudioBrowser;
+        }
+        return embeddedAudioBrowser.getPageView();
     }
 
     private LinearLayout createLyricsPage() {
@@ -2473,7 +1938,7 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         return page;
     }
 
-    private void showPage(int i) {
+    public void showPage(int i) {
         for (int x = 0; x < pages.size(); x++) pages.get(x).setVisibility(x == i ? View.VISIBLE : View.GONE);
         for (int x = 0; x < navTabs.length; x++) {
             boolean active = (x == i);
@@ -2489,7 +1954,15 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
                 navLabels[x].setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
             }
         }
-        if (i == 4) {
+        if (i == 0) {
+            if (embeddedMusicPlayer != null) {
+                embeddedMusicPlayer.updateAllUi();
+            }
+        } else if (i == 1) {
+            if (embeddedAudioBrowser != null) {
+                embeddedAudioBrowser.checkPermissionAndScan();
+            }
+        } else if (i == 4) {
             updateAiUiStates();
         } else if (i == 3) {
             updateKaraokeLinesView();
@@ -3078,18 +2551,10 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     private android.widget.SeekBar.OnSeekBarChangeListener seek(java.util.function.IntConsumer c) { return new android.widget.SeekBar.OnSeekBarChangeListener() { public void onProgressChanged(android.widget.SeekBar s, int p, boolean f) { c.accept(p); } public void onStartTrackingTouch(android.widget.SeekBar s) {} public void onStopTrackingTouch(android.widget.SeekBar s) {} }; }
 
     public void openAudioBrowser() {
-        currentAudioBrowserDialog = new AudioBrowserDialog(this, () -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                audioPermissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO);
-            } else {
-                audioPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
-            }
-        }, (uri, title, artist, durationMs) -> {
-            loadAudio(uri);
-            showStatus("Morceau importé : " + title);
-            Toast.makeText(this, "Audio '" + title + "' importé avec succès !", Toast.LENGTH_SHORT).show();
-        });
-        currentAudioBrowserDialog.show();
+        showPage(1);
+        if (embeddedAudioBrowser != null) {
+            embeddedAudioBrowser.checkPermissionAndScan();
+        }
     }
 
     private void pickAudio() {
@@ -4740,50 +4205,15 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
             // Si le player de base du studio jouait, le mettre en pause pour éviter deux sons superposés
             pauseStudioPlayer();
 
-            // Si le lecteur musical est déjà affiché, ne pas le réinitialiser
-            if (currentMusicPlayerDialog != null && currentMusicPlayerDialog.isShowing()) {
-                return;
-            }
+            showPage(0);
 
-            MusicPlayerDialog dialog = new MusicPlayerDialog(this);
-            AudioBrowserDialog.AudioTrackItem curTrack = pm.getCurrentTrack();
-            if (curTrack != null && ((currentAudioUri != null && currentAudioUri.equals(curTrack.contentUri)) ||
-                    (currentTrackTitle != null && currentTrackTitle.equalsIgnoreCase(curTrack.title)))) {
-                dialog.setLyricsList(this.lyricsList);
-            } else {
-                dialog.setLyricsList(null);
-            }
-            dialog.setOnOpenLyricsListener(this::openFullScreenLyrics);
-            dialog.setOnLyricsUpdatedListener(newLyrics -> {
-                AudioBrowserDialog.AudioTrackItem ct = pm.getCurrentTrack();
-                if (ct != null && currentAudioUri != null && currentAudioUri.equals(ct.contentUri)) {
-                    this.lyricsList.clear();
-                    if (newLyrics != null) {
-                        this.lyricsList.addAll(newLyrics);
-                    }
-                    if (lyricsPreviewText != null) {
-                        lyricsPreviewText.setText(lyricsList.size() + " paroles synchronisées");
-                    }
-                    updateKaraokeLinesView();
-                    if (visualizerView != null) visualizerView.invalidate();
-                    if (visualPagePreview != null) visualPagePreview.invalidate();
+            if (embeddedMusicPlayer != null) {
+                AudioBrowserDialog.AudioTrackItem curTrack = pm.getCurrentTrack();
+                if (curTrack != null && ((currentAudioUri != null && currentAudioUri.equals(curTrack.contentUri)) ||
+                        (currentTrackTitle != null && currentTrackTitle.equalsIgnoreCase(curTrack.title)))) {
+                    embeddedMusicPlayer.setLyricsList(this.lyricsList);
                 }
-            });
-            currentMusicPlayerDialog = dialog;
-            dialog.setOnDismissListener(d -> {
-                if (currentMusicPlayerDialog == dialog) {
-                    currentMusicPlayerDialog = null;
-                }
-            });
-            dialog.show();
-
-            // Si la permission est déjà présente et que la file est vide, rafraîchir en arrière-plan
-            if (hasStorageAudioPermission() && (pm.getCurrentTrack() == null || pm.getQueue().isEmpty())) {
-                pm.scanAndRefreshDeviceTracks(this, false, tracks -> {
-                    if (dialog.isShowing()) {
-                        dialog.onPermissionRefreshed();
-                    }
-                });
+                embeddedMusicPlayer.updateAllUi();
             }
         } catch (Throwable t) {
             Log.e("MainActivity", "Erreur lors de l'ouverture du lecteur audio", t);

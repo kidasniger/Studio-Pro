@@ -154,6 +154,55 @@ public class MusicPlayerDialog extends Dialog implements MusicPlayerManager.Play
     private Button btnPickFileManually;
     private Button btnLoadDemoSong;
 
+    private boolean isEmbeddedMode = false;
+    private View embeddedRoot = null;
+
+    public void setEmbeddedMode(boolean embedded) {
+        this.isEmbeddedMode = embedded;
+    }
+
+    public boolean isEmbeddedMode() {
+        return isEmbeddedMode;
+    }
+
+    public View getPageView() {
+        if (embeddedRoot == null) {
+            this.isEmbeddedMode = true;
+            embeddedRoot = buildView();
+            initVinylAnimation();
+            playerManager.addListener(this);
+            updatePermissionBannerState();
+            updateAllUi();
+            if (hasStoragePermission() && playerManager.getQueue().isEmpty()) {
+                playerManager.scanAndRefreshDeviceTracks(context, false, tracks -> {
+                    updatePermissionBannerState();
+                    updateAllUi();
+                });
+            }
+        }
+        return embeddedRoot;
+    }
+
+    @Override
+    public boolean isShowing() {
+        if (isEmbeddedMode) {
+            return embeddedRoot != null && embeddedRoot.getVisibility() == View.VISIBLE;
+        }
+        return super.isShowing();
+    }
+
+    @Override
+    public void dismiss() {
+        if (isEmbeddedMode) {
+            return;
+        }
+        try {
+            if (isShowing()) {
+                super.dismiss();
+            }
+        } catch (Exception ignored) {}
+    }
+
     public MusicPlayerDialog(@NonNull Context context) {
         super(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         try {
@@ -505,21 +554,23 @@ public class MusicPlayerDialog extends Dialog implements MusicPlayerManager.Play
         shell.setPadding(initialHPad, dp(8), initialHPad, dp(12));
         scrollView.addView(shell, new ScrollView.LayoutParams(-1, -2));
 
-        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
-            );
-            int topPad = Math.max(dp(8), insets.top);
-            int bottomPad = Math.max(dp(12), insets.bottom);
-            int leftPad = Math.max(dp(8), insets.left);
-            int rightPad = Math.max(dp(8), insets.right);
+        if (!isEmbeddedMode) {
+            ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                int topPad = Math.max(dp(8), insets.top);
+                int bottomPad = Math.max(dp(12), insets.bottom);
+                int leftPad = Math.max(dp(8), insets.left);
+                int rightPad = Math.max(dp(8), insets.right);
 
-            shell.setPadding(leftPad, topPad, rightPad, bottomPad);
-            if (queueContainer != null) {
-                queueContainer.setPadding(leftPad, topPad, rightPad, bottomPad);
-            }
-            return windowInsets;
-        });
+                shell.setPadding(leftPad, topPad, rightPad, bottomPad);
+                if (queueContainer != null) {
+                    queueContainer.setPadding(leftPad, topPad, rightPad, bottomPad);
+                }
+                return windowInsets;
+            });
+        }
 
         // 1. Barre supérieure (Header)
         shell.addView(createHeader());
@@ -582,8 +633,21 @@ public class MusicPlayerDialog extends Dialog implements MusicPlayerManager.Play
 
         int iconBtnSize = dp(isNarrow ? 36 : 40);
 
-        // Bouton Réduire / Fermer avec icône chevron bas
-        FrameLayout btnClose = createCircleButton(R.drawable.ic_chevron_down, 0x22FFFFFF, v -> dismiss());
+        // Bouton Réduire / Accès Bibliothèque
+        FrameLayout btnClose = createCircleButton(
+                isEmbeddedMode ? R.drawable.ic_queue_music : R.drawable.ic_chevron_down,
+                0x22FFFFFF,
+                v -> {
+                    if (isEmbeddedMode) {
+                        if (context instanceof MainActivity) {
+                            ((MainActivity) context).showPage(1);
+                        }
+                    } else {
+                        dismiss();
+                    }
+                }
+        );
+        btnClose.setContentDescription(isEmbeddedMode ? "Bibliothèque musicale" : "Fermer le lecteur");
         header.addView(btnClose, new LinearLayout.LayoutParams(iconBtnSize, iconBtnSize));
 
         // Titre
@@ -1946,7 +2010,7 @@ public class MusicPlayerDialog extends Dialog implements MusicPlayerManager.Play
         }
     }
 
-    private void updateAllUi() {
+    public void updateAllUi() {
         updatePermissionBannerState();
         AudioBrowserDialog.AudioTrackItem track = playerManager.getCurrentTrack();
         onTrackChanged(track);

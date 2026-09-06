@@ -151,6 +151,46 @@ public class AudioBrowserDialog extends Dialog {
     private String currentSort = "DATE"; // DATE, TITLE, ARTIST, DURATION
     private String searchKeyword = "";
 
+    private boolean isEmbeddedMode = false;
+    private View embeddedRootLayout = null;
+
+    public void setEmbeddedMode(boolean embedded) {
+        this.isEmbeddedMode = embedded;
+    }
+
+    public boolean isEmbeddedMode() {
+        return isEmbeddedMode;
+    }
+
+    public View getPageView() {
+        if (embeddedRootLayout == null) {
+            this.isEmbeddedMode = true;
+            embeddedRootLayout = buildLayout();
+            checkPermissionAndScan();
+        }
+        return embeddedRootLayout;
+    }
+
+    @Override
+    public boolean isShowing() {
+        if (isEmbeddedMode) {
+            return embeddedRootLayout != null && embeddedRootLayout.getVisibility() == View.VISIBLE;
+        }
+        return super.isShowing();
+    }
+
+    @Override
+    public void dismiss() {
+        if (isEmbeddedMode) {
+            return;
+        }
+        try {
+            if (isShowing()) {
+                super.dismiss();
+            }
+        } catch (Exception ignored) {}
+    }
+
     public AudioBrowserDialog(Activity activity, Runnable requestPermissionAction, OnAudioSelectedListener listener) {
         super(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         this.activity = activity;
@@ -181,13 +221,15 @@ public class AudioBrowserDialog extends Dialog {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF0A0B10);
 
-        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
-            );
-            root.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return windowInsets;
-        });
+        if (!isEmbeddedMode) {
+            ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                root.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+                return windowInsets;
+            });
+        }
 
         // 1. Top Header Bar
         LinearLayout header = new LinearLayout(getContext());
@@ -198,10 +240,19 @@ public class AudioBrowserDialog extends Dialog {
         FrameLayout btnClose = new FrameLayout(getContext());
         shape(btnClose, 0x14FFFFFF, dp(18), 0x22FFFFFF, true);
         ImageView icClose = new ImageView(getContext());
-        icClose.setImageResource(R.drawable.ic_stop);
+        icClose.setImageResource(isEmbeddedMode ? R.drawable.ic_music_note : R.drawable.ic_stop);
         icClose.setColorFilter(0xB3FFFFFF);
         btnClose.addView(icClose, new FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER));
-        btnClose.setOnClickListener(v -> dismiss());
+        btnClose.setContentDescription(isEmbeddedMode ? "Lecteur de musique" : "Fermer");
+        btnClose.setOnClickListener(v -> {
+            if (isEmbeddedMode) {
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).showPage(0);
+                }
+            } else {
+                dismiss();
+            }
+        });
         header.addView(btnClose, new LinearLayout.LayoutParams(dp(36), dp(36)));
 
         header.addView(gapW(12));
@@ -210,7 +261,7 @@ public class AudioBrowserDialog extends Dialog {
         titleCol.setOrientation(LinearLayout.VERTICAL);
 
         TextView title = new TextView(getContext());
-        title.setText("Gestionnaire des Audios");
+        title.setText(isEmbeddedMode ? "Bibliothèque Musicale" : "Gestionnaire des Audios");
         title.setTextSize(17);
         title.setTextColor(Color.WHITE);
         title.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
@@ -230,10 +281,15 @@ public class AudioBrowserDialog extends Dialog {
         icPlayer.setImageResource(R.drawable.ic_nav_audio);
         icPlayer.setColorFilter(0xFF8BE9FD);
         btnOpenPlayer.addView(icPlayer, new FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER));
+        btnOpenPlayer.setContentDescription("Ouvrir le Lecteur");
         btnOpenPlayer.setOnClickListener(v -> {
             stopPreviewPlayer();
-            MusicPlayerDialog mpd = new MusicPlayerDialog(getContext());
-            mpd.show();
+            if (activity instanceof MainActivity) {
+                ((MainActivity) activity).showPage(0);
+            } else {
+                MusicPlayerDialog mpd = new MusicPlayerDialog(getContext());
+                mpd.show();
+            }
         });
         header.addView(btnOpenPlayer, new LinearLayout.LayoutParams(dp(36), dp(36)));
 
@@ -802,9 +858,24 @@ public class AudioBrowserDialog extends Dialog {
 
     private void selectAndImportTrack(AudioTrackItem track) {
         stopPreviewPlayer();
-        dismiss();
+        if (!isEmbeddedMode) {
+            dismiss();
+        }
         if (listener != null) {
             listener.onAudioSelected(track.contentUri, track.title, track.artist, track.durationMs);
+        }
+    }
+
+    public void playTrackInMusicPlayer(AudioTrackItem track) {
+        stopPreviewPlayer();
+        try {
+            MusicPlayerManager pm = MusicPlayerManager.getInstance(getContext());
+            pm.playSingleTrack(track, true);
+            if (activity instanceof MainActivity) {
+                ((MainActivity) activity).showPage(0);
+            }
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Erreur lecture : " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -959,7 +1030,13 @@ public class AudioBrowserDialog extends Dialog {
             }
 
             holder.playBtn.setOnClickListener(v -> playTrackPreview(item));
-            holder.rootView.setOnClickListener(v -> playTrackPreview(item));
+            holder.rootView.setOnClickListener(v -> {
+                if (isEmbeddedMode) {
+                    playTrackInMusicPlayer(item);
+                } else {
+                    playTrackPreview(item);
+                }
+            });
             holder.importBtn.setOnClickListener(v -> selectAndImportTrack(item));
 
             return convertView;
