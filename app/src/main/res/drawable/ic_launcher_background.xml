@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Fond Studio Pro #0A0A0C -->
+    <path
+        android:pathData="M0,0h108v108h-108z"
+        android:fillColor="#0A0A0C" />
+
+    <!-- Halo d'ambiance supérieur violet (#A855F7) -->
+    <path
+        android:pathData="M54,20a34,34 0,1,0 0.1,0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="26"
+                android:gradientRadius="38"
+                android:startColor="#33A855F7"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+
+    <!-- Halo d'ambiance inférieur cyan (#22D3EE) -->
+    <path
+        android:pathData="M54,74a38,38 0,1,0 0.1,0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="68"
+                android:centerY="78"
+                android:gradientRadius="42"
+                android:startColor="#2622D3EE"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+</vector>

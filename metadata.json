@@ -1,0 +1,7 @@
+{
+  "name": "Studio Pro",
+  "description": "Studio Pro - Visualiseur audio avec effets d'ondes, paroles synchronisées, éditeur audio et export vidéo MP4.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

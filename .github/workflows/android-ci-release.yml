@@ -1,0 +1,175 @@
+name: Studio Pro Android CI and Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-pro-android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_VERSION: '9.1.0'
+  APPLICATION_ID: 'com.kidas.studiopro'
+  VERSION_NAME: '2.9.3'
+  VERSION_CODE: '30'
+
+jobs:
+  test:
+    name: Unit tests and debug build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Verify source identity, active version and KIDAS metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "applicationId \"${APPLICATION_ID}\"" app/build.gradle
+          grep -q "namespace '${APPLICATION_ID}'" app/build.gradle
+          grep -q "versionCode ${VERSION_CODE}" app/build.gradle
+          grep -q "versionName \"${VERSION_NAME}\"" app/build.gradle
+          if git grep -n 'com\.humbleman\.visualiseur' -- app; then
+            echo 'Legacy package com.humbleman.visualiseur remains in application sources.'
+            exit 1
+          fi
+          if grep -q 'versionName "2\.9\.2"' app/build.gradle; then
+            echo 'Active Android configuration still targets 2.9.2.'
+            exit 1
+          fi
+          test -s kidas.md
+          grep -q '^icon: "https://raw.githubusercontent.com/kidasniger/Audio/main/assets/studio-pro-icon\.svg"$' kidas.md
+          if grep -Eiq 'avatars\.githubusercontent\.com|owner\.avatar_url' kidas.md; then
+            echo 'GitHub owner avatar references are forbidden in KIDAS project metadata.'
+            exit 1
+          fi
+          grep -q '^cover: "À renseigner"$' kidas.md
+          grep -q '^demo: "À renseigner"$' kidas.md
+          grep -q '^documentation: "À renseigner"$' kidas.md
+          grep -q '^license: "À renseigner"$' kidas.md
+          grep -q '^# Vidéos$' kidas.md
+          grep -q 'https://youtube.com/shorts/yYt1xZj02nc?si=umcr-nAAz0pg_wN0' kidas.md
+
+      - name: Run focused Studio Pro 2.9.3 audit
+        run: python3 tools/audit_2_9_3.py
+
+      - name: Run unit tests
+        run: gradle test --stacktrace
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Verify debug APK exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs -type f -name '*.apk' | grep '/debug/' | head -1 || true)"
+          test -n "$APK"
+          test -s "$APK"
+          echo "Debug APK: $APK"
+          sha256sum "$APK"
+          stat -c 'Debug APK size: %s bytes' "$APK"
+
+  release:
+    name: Release and GitHub Release
+    needs: test
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Build release APK
+        run: gradle assembleRelease --stacktrace
+
+      - name: Locate and verify release APK
+        id: release_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find . -type f \( -name 'app-release.apk' -o -name 'app-release-unsigned.apk' \) -print -quit)"
+          if [ -z "$APK" ]; then
+            echo 'No release APK was found after assembleRelease.'
+            echo 'Generated APK candidates:'
+            find . -type f -name '*.apk' -print || true
+            exit 1
+          fi
+          test -s "$APK"
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          sha256sum "$APK"
+          stat -c 'Release APK size: %s bytes' "$APK"
+          echo "Release APK: $APK"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Studio-Pro-v${{ env.VERSION_NAME }}-release
+          path: ${{ steps.release_apk.outputs.apk }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create GitHub Release and version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION_NAME}"
+          SHA="$(git rev-parse HEAD)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -fa "$TAG" "$SHA" -m "Studio Pro ${VERSION_NAME}"
+          git push origin "$TAG" --force
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --target "$SHA" --title "Studio Pro ${VERSION_NAME}" --notes "Studio Pro ${VERSION_NAME}: package com.kidas.studiopro, word-level lyric timing, hardened audio editing/export paths and responsive interface." || true
+            gh release upload "$TAG" "${{ steps.release_apk.outputs.apk }}" --clobber
+          else
+            gh release create "$TAG" "${{ steps.release_apk.outputs.apk }}" \
+              --target "$SHA" \
+              --title "Studio Pro ${VERSION_NAME}" \
+              --notes "Studio Pro ${VERSION_NAME}: package com.kidas.studiopro, word-level lyric timing, hardened audio editing/export paths and responsive interface."
+          fi
+
+          git fetch --tags --force
+          TAG_SHA="$(git rev-parse "${TAG}^{commit}")"
+          test "$TAG_SHA" = "$SHA"
+          gh release view "$TAG" >/dev/null
+          echo "Release and tag ${TAG} verified at ${SHA}."

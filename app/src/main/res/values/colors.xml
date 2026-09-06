@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base Backgrounds -->
+    <color name="bg_obsidian">#0A0A0C</color>
+    <color name="bg_radial_deep">#150B29</color>
+    <color name="bg_ambient_purple">#5B21B6</color>
+    <color name="bg_surface_card">#161618</color>
+    <color name="bg_chassis">#1E1E20</color>
+
+    <!-- Neon Accents -->
+    <color name="accent_cyan">#22D3EE</color>
+    <color name="accent_purple">#A855F7</color>
+    <color name="accent_pink">#EC4899</color>
+    <color name="accent_green">#22C55E</color>
+
+    <!-- Typography -->
+    <color name="text_primary">#F5F5F7</color>
+    <color name="text_secondary">#9CA3AF</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#0A0A0C</color>
+
+    <!-- Translucent Glassmorphism Surfaces & Borders -->
+    <color name="glass_surface">#0AFFFFFF</color> <!-- rgba(255,255,255,0.04) -->
+    <color name="glass_border">#14FFFFFF</color>  <!-- rgba(255,255,255,0.08) -->
+    <color name="glass_border_strong">#1FFFFFFF</color> <!-- rgba(255,255,255,0.12) -->
+    <color name="glass_divider">#0FFFFFFF</color> <!-- rgba(255,255,255,0.06) -->
+    <color name="glass_nav_dock">#99000000</color> <!-- rgba(0,0,0,0.60) -->
+
+    <!-- Status Badges -->
+    <color name="badge_cyan_bg">#2622D3EE</color> <!-- rgba(34,211,238,0.15) -->
+    <color name="badge_cyan_border">#3322D3EE</color> <!-- rgba(34,211,238,0.20) -->
+    <color name="badge_green_bg">#3322C55E</color> <!-- rgba(34,197,94,0.20) -->
+    <color name="badge_green_border">#4D22C55E</color> <!-- rgba(34,197,94,0.30) -->
+
+    <!-- Legacy compatibility aliases -->
+    <color name="glassBg">#150B29</color>
+    <color name="noir">#0A0A0C</color>
+    <color name="cendre">#9CA3AF</color>
+</resources>

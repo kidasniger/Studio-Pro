@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Contour Squircle Studio Pro (Transparent au centre, pas de bloc solide) -->
+    <path
+        android:pathData="M40,25 L68,25 A15,15 0,0,1 83,40 L83,68 A15,15 0,0,1 68,83 L40,83 A15,15 0,0,1 25,68 L25,40 A15,15 0,0,1 40,25 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.5" />
+
+    <!-- Barres d'égaliseur audio blanches pour barre de notification -->
+    <path
+        android:pathData="M37,47 L37,61"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M43,38 L43,70"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M49,45 L49,63"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+
+    <!-- Étoile Studio Pro étincelle -->
+    <path
+        android:pathData="M64,41 Q64,52 53,54 Q64,56 64,67 Q64,56 75,54 Q64,52 64,41 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Satellite haut -->
+    <path
+        android:pathData="M48,34 Q48,37.5 44.5,38 Q48,38.5 48,42 Q48,38.5 51.5,38 Q48,37.5 48,34 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Satellite bas -->
+    <path
+        android:pathData="M73,63 Q73,65.5 70.5,66 Q73,66.5 73,69 Q73,66.5 75.5,66 Q73,65.5 73,63 Z"
+        android:fillColor="#FFFFFFFF" />
+
+</vector>

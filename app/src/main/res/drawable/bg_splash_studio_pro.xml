@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="390dp"
+    android:height="844dp"
+    android:viewportWidth="390"
+    android:viewportHeight="844">
+
+    <!-- Fond Studio Pro base #0A0A0C -->
+    <path
+        android:pathData="M0,0h390v844h-390z"
+        android:fillColor="#0A0A0C" />
+
+    <!-- 1. Halo supérieur violet (#A855F7) -->
+    <path
+        android:pathData="M0,0 L390,0 L390,500 L0,500 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="195"
+                android:centerY="0"
+                android:gradientRadius="420"
+                android:startColor="#60A855F7"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Halo haut-droite cyan (#22D3EE) -->
+    <path
+        android:pathData="M100,0 L390,0 L390,450 L100,450 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="330"
+                android:centerY="150"
+                android:gradientRadius="320"
+                android:startColor="#4722D3EE"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+
+    <!-- 3. Halo bas-gauche violet profond (#150B29 / #5B21B6) -->
+    <path
+        android:pathData="M0,450 L390,450 L390,844 L0,844 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="78"
+                android:centerY="740"
+                android:gradientRadius="400"
+                android:startColor="#E6150B29"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+
+</vector>

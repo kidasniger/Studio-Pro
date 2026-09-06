@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradMid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#22E6E6"/>
+      <stop offset="100%" stop-color="#8B4DFF"/>
+    </linearGradient>
+    <linearGradient id="gradStarLarge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6FEFFF"/>
+      <stop offset="50%" stop-color="#8BB7FF"/>
+      <stop offset="100%" stop-color="#9B6CFF"/>
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1AE2D0" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#7A4BFF" stop-opacity="0.5"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="10" y="10" width="180" height="180" rx="42" ry="42" fill="#0A0A12"/>
+  <rect x="10" y="10" width="180" height="180" rx="42" ry="42" fill="none" stroke="url(#borderGrad)" stroke-width="1.5" opacity="0.7"/>
+
+  <rect x="48" y="82" width="14" height="46" rx="7" ry="7" fill="#19E5E6"/>
+  <rect x="69" y="52" width="14" height="96" rx="7" ry="7" fill="url(#gradMid)"/>
+  <rect x="90" y="72" width="14" height="56" rx="7" ry="7" fill="#A153F5"/>
+
+  <g transform="translate(88, 56) scale(0.9)">
+    <path d="M 0 -10 C 1.5 -2.5 7 -1 10 0 C 7 1 1.5 2.5 0 10 C -1.5 2.5 -7 1 -10 0 C -7 -1 -1.5 -2.5 0 -10 Z" fill="#3BE6E6"/>
+  </g>
+
+  <g transform="translate(135, 100)">
+    <path d="M 0 -38 C 4 -12 16 -5 38 0 C 16 5 4 12 0 38 C -4 12 -16 5 -38 0 C -16 -5 -4 -12 0 -38 Z" fill="url(#gradStarLarge)"/>
+    <path d="M 0 -12 C 1.5 -4 6 -1.5 12 0 C 6 1.5 1.5 4 0 12 C -1.5 4 -6 1.5 -12 0 C -6 -1.5 -1.5 -4 0 -12 Z" fill="white"/>
+  </g>
+
+  <g transform="translate(155, 133) scale(0.7)">
+    <path d="M 0 -10 C 1.5 -2.5 7 -1 10 0 C 7 1 1.5 2.5 0 10 C -1.5 2.5 -7 1 -10 0 C -7 -1 -1.5 -2.5 0 -10 Z" fill="#B15CFF"/>
+  </g>
+</svg>

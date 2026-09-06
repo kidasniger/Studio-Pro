@@ -1,0 +1,87 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.kidas.studiopro'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.kidas.studiopro"
+        minSdk 24
+        targetSdk 35
+        versionCode 30
+        versionName "2.9.3"
+    }
+
+    signingConfigs {
+        debug {
+            def keystoreFile = file("${rootDir}/debug.keystore")
+            def base64File = file("${rootDir}/debug.keystore.base64")
+            if (!keystoreFile.exists() && base64File.exists()) {
+                try {
+                    byte[] decoded = java.util.Base64.getDecoder().decode(base64File.text.trim().replaceAll("\\s", ""))
+                    keystoreFile.withOutputStream { it.write(decoded) }
+                } catch (Exception ignored) {}
+            }
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
+        }
+        studioRelease {
+            def releaseStore = System.getenv("STUDIO_PRO_KEYSTORE")
+            def releaseStoreBase64 = System.getenv("STUDIO_PRO_KEYSTORE_BASE64")
+            def releasePassword = System.getenv("STUDIO_PRO_KEYSTORE_PASSWORD")
+            def releaseAlias = System.getenv("STUDIO_PRO_KEY_ALIAS")
+            def releaseKeyPassword = System.getenv("STUDIO_PRO_KEY_PASSWORD")
+            if (releaseStoreBase64 && releasePassword && releaseAlias && releaseKeyPassword) {
+                def outFile = file("${rootDir}/studio-release.keystore")
+                if (!outFile.exists()) {
+                    byte[] decoded = java.util.Base64.getDecoder().decode(releaseStoreBase64.replaceAll("\\s", ""))
+                    outFile.withOutputStream { it.write(decoded) }
+                }
+                storeFile outFile
+                storePassword releasePassword
+                keyAlias releaseAlias
+                keyPassword releaseKeyPassword
+                v1SigningEnabled true
+                v2SigningEnabled true
+            } else if (releaseStore && releasePassword && releaseAlias && releaseKeyPassword) {
+                storeFile file(releaseStore)
+                storePassword releasePassword
+                keyAlias releaseAlias
+                keyPassword releaseKeyPassword
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            versionNameSuffix "-debug"
+            signingConfig signingConfigs.debug
+        }
+        release {
+            minifyEnabled false
+            signingConfig (signingConfigs.studioRelease.storeFile ? signingConfigs.studioRelease : signingConfigs.debug)
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'androidx.media:media:1.7.0'
+    testImplementation 'junit:junit:4.13.2'
+}
