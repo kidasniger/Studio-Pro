@@ -202,6 +202,19 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     private VisualizerView visualPagePreview;
     private TextView visualPageTitle, visualPageBgTag;
     private Button exportVisualizerToggleButton, exportLyricsToggleButton;
+    private FrameLayout lyricsPageRoot;
+    private ImageView lyricsBackgroundView;
+    private View lyricsBackgroundOverlay;
+    private TextView lyricsTrackTitleText;
+    private TextView lyricsTrackArtistText;
+    private ScrollView lyricsFullScrollView;
+    private LinearLayout lyricsFullContainer;
+    private final List<TextView> lyricsLineViews = new ArrayList<>();
+    private int currentLyricsActiveIndex = -1;
+    private LinearLayout lyricsEmptyState;
+    private Button lyricsPhotoBtn;
+    private Button lyricsResetPhotoBtn;
+    private Button lyricsImportLrcBtn;
     private FrameLayout pageHost;
     private FrameLayout headerMusicPlayerBtn;
     private final List<View> pages = new ArrayList<>();
@@ -358,9 +371,9 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
             R.drawable.ic_nav_lyrics,
             R.drawable.ic_nav_audio,
             R.drawable.ic_nav_ai,
-            R.drawable.ic_nav_export
+            R.drawable.ic_sliders
         };
-        String[] labels = {"Lecteur", "Bibliothèque", "Paroles", "Audio", "IA", "Export"};
+        String[] labels = {"Lecteur", "Bibliothèque", "Paroles", "Audio", "IA", "Paramètres"};
 
         for (int i = 0; i < 6; i++) {
             final int x = i;
@@ -411,7 +424,7 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         pages.add(createLyricsPage());
         pages.add(createAudioPage());
         pages.add(createAiPage());
-        pages.add(createExportPage());
+        pages.add(createSettingsPage());
 
         for (View p : pages) pageHost.addView(p, new FrameLayout.LayoutParams(-1, -1));
         showPage(0);
@@ -525,7 +538,7 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     private View createPlayerPage() {
         if (embeddedMusicPlayer == null) {
             embeddedMusicPlayer = new MusicPlayerDialog(this);
-            embeddedMusicPlayer.setOnOpenLyricsListener(this::openFullScreenLyrics);
+            embeddedMusicPlayer.setOnOpenLyricsListener(() -> showPage(2));
             embeddedMusicPlayer.setOnLyricsUpdatedListener(newLyrics -> {
                 this.lyricsList.clear();
                 if (newLyrics != null) {
@@ -560,185 +573,96 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         return embeddedAudioBrowser.getPageView();
     }
 
-    private LinearLayout createLyricsPage() {
-        LinearLayout page = page();
-        ScrollView s = scroll();
-        LinearLayout c = vertical();
-        c.setPadding(0, dp(4), 0, dp(12));
+    private View createLyricsPage() {
+        lyricsPageRoot = new FrameLayout(this);
+        lyricsPageRoot.setBackgroundColor(0xFF07090E);
 
-        // 1. Header ("Paroles" + "LRC • 98% SYNC" ou "LRC • INACTIF")
-        LinearLayout lHead = row();
-        lHead.addView(title("Paroles", 16, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
-        lyricsHeaderBadge = badge(lyricsList.isEmpty() ? "LRC • INACTIF" : "LRC • 98% SYNC", 0x14FFFFFF, 0xFF9CA3AF, false);
-        lHead.addView(lyricsHeaderBadge);
-        c.addView(lHead);
-        c.addView(gap(12));
+        // 1. Fond photo (Image personnalisée ou pochette d'album)
+        lyricsBackgroundView = new ImageView(this);
+        lyricsBackgroundView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        lyricsPageRoot.addView(lyricsBackgroundView, new FrameLayout.LayoutParams(-1, -1));
 
-        // 2. Mini Scrubber Waveform Bar (h-[52px], rounded-[14px], bg-black/50, border-white/0.08, p-2)
-        FrameLayout scrubberWrap = new FrameLayout(this);
-        shape(scrubberWrap, 0x80000000, dp(14), 0x14FFFFFF, false);
-        scrubberWrap.setPadding(dp(8), dp(6), dp(8), dp(6));
+        // 2. Voile sombre semi-transparent pour lisibilité parfaite des paroles
+        lyricsBackgroundOverlay = new View(this);
+        lyricsBackgroundOverlay.setBackgroundColor(0xD907090E); // ~85% sombre
+        lyricsPageRoot.addView(lyricsBackgroundOverlay, new FrameLayout.LayoutParams(-1, -1));
 
-        miniLyricsScrubberView = new MiniLyricsScrubberView(this);
-        scrubberWrap.addView(miniLyricsScrubberView, new FrameLayout.LayoutParams(-1, dp(40), Gravity.CENTER));
-        c.addView(scrubberWrap, new LinearLayout.LayoutParams(-1, dp(52)));
-        c.addView(gap(14));
+        // 3. Conteneur principal vertical
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16), dp(12), dp(16), dp(12));
 
-        // 3. Toggle Mode Paroles (Karaoké défilant / Mot à mot / Bloc fixe) dans une pilule w-fit
-        LinearLayout toggleContainer = new LinearLayout(this);
-        toggleContainer.setOrientation(LinearLayout.HORIZONTAL);
-        shape(toggleContainer, 0x10FFFFFF, dp(999), 0x14FFFFFF, false);
-        toggleContainer.setPadding(dp(4), dp(4), dp(4), dp(4));
+        // Barre supérieure épurée : Titre/Artiste + Bouton Photo + Bouton LRC
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(0, dp(4), 0, dp(10));
 
-        lyricsModeButtons.clear();
-        String[] modes = {"Karaoké défilant", "Mot à mot", "Bloc fixe"};
-        String[] modeVals = {"scroll", "word", "fixed"};
-        for (int i = 0; i < modes.length; i++) {
-            final String mv = modeVals[i];
-            boolean sel = textMode.equals(mv);
+        LinearLayout trackInfo = new LinearLayout(this);
+        trackInfo.setOrientation(LinearLayout.VERTICAL);
 
-            Button mb = new Button(this);
-            mb.setText(modes[i]);
-            mb.setTextSize(11);
-            mb.setAllCaps(false);
-            mb.setGravity(Gravity.CENTER);
-            mb.setPadding(dp(12), dp(6), dp(12), dp(6));
-            mb.setMinHeight(0);
-            mb.setMinimumHeight(0);
-            mb.setMinWidth(0);
-            mb.setMinimumWidth(0);
+        lyricsTrackTitleText = new TextView(this);
+        lyricsTrackTitleText.setText((currentTrackTitle != null && !currentTrackTitle.isEmpty()) ? currentTrackTitle : "Paroles");
+        lyricsTrackTitleText.setTextColor(Color.WHITE);
+        lyricsTrackTitleText.setTextSize(16);
+        lyricsTrackTitleText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        lyricsTrackTitleText.setSingleLine(true);
+        lyricsTrackTitleText.setEllipsize(TextUtils.TruncateAt.END);
+        trackInfo.addView(lyricsTrackTitleText);
 
-            if (sel) {
-                mb.setBackgroundResource(R.drawable.bg_chip_active);
-                mb.setTextColor(Color.WHITE);
-                mb.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-            } else {
-                mb.setBackground(null);
-                mb.setTextColor(0x66FFFFFF); // 40% blanc
-                mb.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        lyricsTrackArtistText = new TextView(this);
+        lyricsTrackArtistText.setText((currentTrackArtist != null && !currentTrackArtist.isEmpty()) ? currentTrackArtist : "Studio Pro");
+        lyricsTrackArtistText.setTextColor(0xFF22D3EE);
+        lyricsTrackArtistText.setTextSize(12);
+        lyricsTrackArtistText.setSingleLine(true);
+        trackInfo.addView(lyricsTrackArtistText);
+
+        topBar.addView(trackInfo, new LinearLayout.LayoutParams(0, -2, 1));
+
+        // Bouton "Photo" (permet de choisir une photo de fond pour l'écran paroles et le visualiseur)
+        lyricsPhotoBtn = button("📷 Photo", 0x2622D3EE, 0xFF22D3EE, 0x4D22D3EE);
+        lyricsPhotoBtn.setTextSize(12);
+        lyricsPhotoBtn.setPadding(dp(12), dp(6), dp(12), dp(6));
+        lyricsPhotoBtn.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        lyricsPhotoBtn.setOnClickListener(v -> {
+            pickPurpose = "background";
+            try {
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.setType("image/*");
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                filePickerLauncher.launch(Intent.createChooser(intent, "Choisir une photo de fond"));
+            } catch (Exception e1) {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.setType("image/*");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    filePickerLauncher.launch(intent);
+                } catch (Exception ignored) {}
             }
+        });
+        topBar.addView(lyricsPhotoBtn, new LinearLayout.LayoutParams(-2, dp(34)));
 
-            mb.setOnClickListener(v -> updateLyricsModeSelection(mv));
-            lyricsModeButtons.add(mb);
+        // Bouton Retirer la photo personnalisée (visible uniquement si une photo est active)
+        lyricsResetPhotoBtn = button("✕", 0x1AFFFFFF, 0xFFE2E8F0, 0x33FFFFFF);
+        lyricsResetPhotoBtn.setTextSize(12);
+        lyricsResetPhotoBtn.setPadding(dp(10), dp(6), dp(10), dp(6));
+        lyricsResetPhotoBtn.setVisibility(backgroundBitmap != null ? View.VISIBLE : View.GONE);
+        lyricsResetPhotoBtn.setOnClickListener(v -> {
+            backgroundBitmap = null;
+            updateLyricsPageBackground();
+            if (visualizerView != null) visualizerView.invalidate();
+            Toast.makeText(this, "Photo de fond retirée", Toast.LENGTH_SHORT).show();
+        });
+        LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(-2, dp(34));
+        resetLp.leftMargin = dp(6);
+        topBar.addView(lyricsResetPhotoBtn, resetLp);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(30));
-            if (i > 0) lp.leftMargin = dp(2);
-            toggleContainer.addView(mb, lp);
-        }
-        c.addView(toggleContainer, new LinearLayout.LayoutParams(-2, -2));
-        c.addView(gap(16));
-
-        // 4. Vue Karaoké Centrée (Ligne active 28sp dégradé au centre, dégradé d'opacité passé/futur 18sp)
-        LinearLayout karaokeCard = vertical();
-        karaokeCard.setGravity(Gravity.CENTER);
-        karaokeCard.setPadding(dp(16), dp(24), dp(16), dp(24));
-
-        karaokePastLine1 = new TextView(this);
-        karaokePastLine1.setTextSize(18);
-        karaokePastLine1.setTextColor(0xFFF5F5F7);
-        karaokePastLine1.setAlpha(0.50f);
-        karaokePastLine1.setGravity(Gravity.CENTER);
-        karaokePastLine1.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        karaokePastLine1.setPadding(0, dp(4), 0, dp(4));
-        karaokeCard.addView(karaokePastLine1);
-
-        karaokePastLine2 = new TextView(this);
-        karaokePastLine2.setTextSize(18);
-        karaokePastLine2.setTextColor(0xFFF5F5F7);
-        karaokePastLine2.setAlpha(0.75f);
-        karaokePastLine2.setGravity(Gravity.CENTER);
-        karaokePastLine2.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        karaokePastLine2.setPadding(0, dp(4), 0, dp(6));
-        karaokeCard.addView(karaokePastLine2);
-
-        karaokeActiveLine = new TextView(this);
-        karaokeActiveLine.setTextSize(28);
-        karaokeActiveLine.setTextColor(0xFF22D3EE);
-        karaokeActiveLine.setGravity(Gravity.CENTER);
-        karaokeActiveLine.setPadding(0, dp(8), 0, dp(8));
-        karaokeActiveLine.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        karaokeActiveLine.setLetterSpacing(-0.02f);
-        karaokeCard.addView(karaokeActiveLine);
-
-        karaokeNextLine1 = new TextView(this);
-        karaokeNextLine1.setTextSize(18);
-        karaokeNextLine1.setTextColor(0xFFF5F5F7);
-        karaokeNextLine1.setAlpha(0.75f);
-        karaokeNextLine1.setGravity(Gravity.CENTER);
-        karaokeNextLine1.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        karaokeNextLine1.setPadding(0, dp(6), 0, dp(4));
-        karaokeCard.addView(karaokeNextLine1);
-
-        karaokeNextLine2 = new TextView(this);
-        karaokeNextLine2.setTextSize(18);
-        karaokeNextLine2.setTextColor(0xFFF5F5F7);
-        karaokeNextLine2.setAlpha(0.50f);
-        karaokeNextLine2.setGravity(Gravity.CENTER);
-        karaokeNextLine2.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        karaokeNextLine2.setPadding(0, dp(4), 0, dp(4));
-        karaokeCard.addView(karaokeNextLine2);
-
-        c.addView(karaokeCard, new LinearLayout.LayoutParams(-1, -2));
-        c.addView(gap(16));
-
-        // 5. Boutons Flottants en Bas ("Enregistrer Micro & Live IA", "Générer paroles (IA)" & "Importer .LRC")
-        LinearLayout floatingActions = vertical();
-        floatingActions.setPadding(0, dp(8), 0, dp(4));
-
-        // Bouton Principal Pleine Largeur : Enregistrer & Transcrire en direct (Micro IA)
-        LinearLayout btnLiveMic = row();
-        shape(btnLiveMic, 0x1A22D3EE, dp(16), 0x3322D3EE, true);
-        btnLiveMic.setPadding(dp(16), dp(12), dp(16), dp(12));
-        btnLiveMic.setGravity(Gravity.CENTER);
-        btnLiveMic.setOnClickListener(v -> openVoiceRecorderModal());
-
-        ImageView micIc = new ImageView(this);
-        micIc.setImageResource(R.drawable.ic_mic);
-        micIc.setColorFilter(0xFF22D3EE); // Cyan #22D3EE
-        btnLiveMic.addView(micIc, new LinearLayout.LayoutParams(dp(18), dp(18)));
-
-        TextView micTxt = new TextView(this);
-        micTxt.setText(" Enregistrer & Transcrire en direct (Micro IA)");
-        micTxt.setTextSize(13);
-        micTxt.setTextColor(Color.WHITE);
-        micTxt.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        micTxt.setPadding(dp(8), 0, 0, 0);
-        btnLiveMic.addView(micTxt);
-
-        floatingActions.addView(btnLiveMic, new LinearLayout.LayoutParams(-1, dp(48)));
-        floatingActions.addView(gap(10));
-
-        LinearLayout actionsRow = row();
-
-        // Bouton Gauche : Générer paroles (IA)
-        LinearLayout btnGenAi = row();
-        shape(btnGenAi, 0x10FFFFFF, dp(16), 0x14FFFFFF, true);
-        btnGenAi.setPadding(dp(16), dp(12), dp(16), dp(12));
-        btnGenAi.setGravity(Gravity.CENTER);
-        btnGenAi.setOnClickListener(v -> transcribeFromChat());
-
-        ImageView aiWandIc = new ImageView(this);
-        aiWandIc.setImageResource(R.drawable.ic_nav_ai);
-        aiWandIc.setColorFilter(0xFFA855F7); // Violet #A855F7
-        btnGenAi.addView(aiWandIc, new LinearLayout.LayoutParams(dp(16), dp(16)));
-
-        TextView aiWandTxt = new TextView(this);
-        aiWandTxt.setText("Générer (Fichier)");
-        aiWandTxt.setTextSize(13);
-        aiWandTxt.setTextColor(Color.WHITE);
-        aiWandTxt.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        aiWandTxt.setPadding(dp(8), 0, 0, 0);
-        btnGenAi.addView(aiWandTxt);
-
-        actionsRow.addView(btnGenAi, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actionsRow.addView(gapW(10));
-
-        // Bouton Droit : Importer .LRC
-        LinearLayout btnImpLrc = row();
-        shape(btnImpLrc, 0x08FFFFFF, dp(16), 0x1FFFFFFF, true);
-        btnImpLrc.setPadding(dp(16), dp(12), dp(16), dp(12));
-        btnImpLrc.setGravity(Gravity.CENTER);
-        btnImpLrc.setOnClickListener(v -> {
+        // Bouton Importer .LRC
+        lyricsImportLrcBtn = button("+ LRC", 0x14FFFFFF, 0xFFE2E8F0, 0x26FFFFFF);
+        lyricsImportLrcBtn.setTextSize(12);
+        lyricsImportLrcBtn.setPadding(dp(10), dp(6), dp(10), dp(6));
+        lyricsImportLrcBtn.setOnClickListener(v -> {
             pickPurpose = "lrc";
             try {
                 Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -751,125 +675,196 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
                     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     intent.setType("*/*");
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                     filePickerLauncher.launch(intent);
                 } catch (Exception ignored) {}
             }
         });
+        LinearLayout.LayoutParams lrcLp = new LinearLayout.LayoutParams(-2, dp(34));
+        lrcLp.leftMargin = dp(6);
+        topBar.addView(lyricsImportLrcBtn, lrcLp);
 
-        TextView impLrcTxt = new TextView(this);
-        impLrcTxt.setText("Importer .LRC");
-        impLrcTxt.setTextSize(13);
-        impLrcTxt.setTextColor(0xB3FFFFFF); // 70% blanc
-        impLrcTxt.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        btnImpLrc.addView(impLrcTxt);
+        content.addView(topBar);
 
-        actionsRow.addView(btnImpLrc, new LinearLayout.LayoutParams(-2, dp(48)));
-        floatingActions.addView(actionsRow);
-        floatingActions.addView(gap(8));
+        // 4. ScrollView contenant l'intégralité des paroles
+        lyricsFullScrollView = new ScrollView(this);
+        lyricsFullScrollView.setVerticalScrollBarEnabled(false);
+        lyricsFullScrollView.setFillViewport(true);
 
-        TextView capTxt = new TextView(this);
-        capTxt.setText("COMPONENT: GLASS FLOATING BUTTONS");
-        capTxt.setTextSize(11);
-        capTxt.setLetterSpacing(0.12f);
-        capTxt.setTextColor(0x4DFFFFFF);
-        capTxt.setGravity(Gravity.CENTER);
-        floatingActions.addView(capTxt);
+        lyricsFullContainer = new LinearLayout(this);
+        lyricsFullContainer.setOrientation(LinearLayout.VERTICAL);
+        lyricsFullContainer.setPadding(0, dp(60), 0, dp(140));
 
-        c.addView(floatingActions);
-        c.addView(gap(14));
+        lyricsFullScrollView.addView(lyricsFullContainer, new FrameLayout.LayoutParams(-1, -2));
+        content.addView(lyricsFullScrollView, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        // 6. Section Outils Complémentaires (Rechercher LRCLIB, Exporter .LRC, Citation manuelle)
-        LinearLayout extraCard = card(0x0AFFFFFF, 0x14FFFFFF, 20);
-        extraCard.setPadding(dp(14), dp(14), dp(14), dp(14));
-        extraCard.addView(section("OUTILS & SYNCHRONISATION"));
-        extraCard.addView(gap(8));
+        // 5. Vue d'état vide (affichée quand aucune parole n'est chargée)
+        lyricsEmptyState = new LinearLayout(this);
+        lyricsEmptyState.setOrientation(LinearLayout.VERTICAL);
+        lyricsEmptyState.setGravity(Gravity.CENTER);
+        lyricsEmptyState.setPadding(dp(24), dp(40), dp(24), dp(40));
 
-        LinearLayout extraBtns0 = row();
-        Button fsKaraokeBtn = button(" Plein Écran Karaoké", 0x2622D3EE, 0xFF22D3EE, 0x4D22D3EE);
-        fsKaraokeBtn.setTextSize(12);
-        fsKaraokeBtn.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        fsKaraokeBtn.setOnClickListener(v -> openFullScreenLyrics());
-        extraBtns0.addView(fsKaraokeBtn, new LinearLayout.LayoutParams(0, dp(40), 1));
+        ImageView emptyIcon = new ImageView(this);
+        emptyIcon.setImageResource(R.drawable.ic_nav_lyrics);
+        emptyIcon.setColorFilter(0x4D22D3EE);
+        lyricsEmptyState.addView(emptyIcon, new LinearLayout.LayoutParams(dp(56), dp(56)));
 
-        Button timelineBtn = button(" Synchro fine", 0x26F59E0B, 0xFFF59E0B, 0x4DF59E0B);
-        timelineBtn.setTextSize(12);
-        timelineBtn.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        timelineBtn.setOnClickListener(v -> openLyricsTimelineEditor());
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(40), 1);
-        tlp.leftMargin = dp(8);
-        extraBtns0.addView(timelineBtn, tlp);
-        extraCard.addView(extraBtns0);
-        extraCard.addView(gap(8));
+        lyricsEmptyState.addView(gap(16));
 
-        LinearLayout extraBtnsTranslate = row();
-        Button translateLyricsBtn = button(" Traduire (Groq IA)", 0x26A855F7, 0xFFA855F7, 0x4DA855F7);
-        translateLyricsBtn.setTextSize(12);
-        translateLyricsBtn.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        translateLyricsBtn.setOnClickListener(v -> openLyricsTranslationDialog());
-        extraBtnsTranslate.addView(translateLyricsBtn, new LinearLayout.LayoutParams(0, dp(40), 1));
+        TextView emptyTitle = new TextView(this);
+        emptyTitle.setText("Aucune parole synchronisée");
+        emptyTitle.setTextSize(16);
+        emptyTitle.setTextColor(Color.WHITE);
+        emptyTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        emptyTitle.setGravity(Gravity.CENTER);
+        lyricsEmptyState.addView(emptyTitle);
 
-        Button exportLrcBtn = button("Exporter .LRC", 0x14FFFFFF, 0xFFE2E3EA, 0x26FFFFFF);
-        exportLrcBtn.setTextSize(12);
-        exportLrcBtn.setOnClickListener(v -> exportCurrentLrcFile());
-        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(0, dp(40), 1);
-        elp.leftMargin = dp(8);
-        extraBtnsTranslate.addView(exportLrcBtn, elp);
-        extraCard.addView(extraBtnsTranslate);
-        extraCard.addView(gap(8));
+        lyricsEmptyState.addView(gap(6));
 
-        LinearLayout extraBtns = row();
-        Button searchLrcLibBtn = button("Rechercher LRCLIB", 0x1A22D3EE, 0xFF22D3EE, 0x3322D3EE);
-        searchLrcLibBtn.setTextSize(12);
-        searchLrcLibBtn.setOnClickListener(v -> searchLrcLib(true));
-        extraBtns.addView(searchLrcLibBtn, new LinearLayout.LayoutParams(0, dp(40), 1));
+        TextView emptySub = new TextView(this);
+        emptySub.setText("Importez un fichier .LRC ou sélectionnez un morceau pour afficher les paroles.");
+        emptySub.setTextSize(12);
+        emptySub.setTextColor(0x80FFFFFF);
+        emptySub.setGravity(Gravity.CENTER);
+        lyricsEmptyState.addView(emptySub);
 
-        Button embedLyricsBtn = button("Intégrer à l'audio", 0x14FFFFFF, 0xFFE2E3EA, 0x26FFFFFF);
-        embedLyricsBtn.setTextSize(12);
-        embedLyricsBtn.setOnClickListener(v -> embedLyricsDirectlyToAudio());
-        LinearLayout.LayoutParams emp = new LinearLayout.LayoutParams(0, dp(40), 1);
-        emp.leftMargin = dp(8);
-        extraBtns.addView(embedLyricsBtn, emp);
-        extraCard.addView(extraBtns);
-        extraCard.addView(gap(10));
+        lyricsEmptyState.addView(gap(20));
 
-        lyricsPreviewText = subtitle(lyricsList.isEmpty() ? "Aucune parole synchronisée chargée." : lyricsList.size() + " lignes synchronisées actives.");
-        lyricsPreviewText.setPadding(dp(2), dp(2), dp(2), dp(2));
-        extraCard.addView(lyricsPreviewText);
-        extraCard.addView(gap(8));
+        Button importBtn = button("Importer un fichier .LRC", 0x2222D3EE, 0xFF22D3EE, 0x4D22D3EE);
+        importBtn.setTextSize(13);
+        importBtn.setPadding(dp(20), dp(10), dp(20), dp(10));
+        importBtn.setOnClickListener(v -> lyricsImportLrcBtn.performClick());
+        lyricsEmptyState.addView(importBtn, new LinearLayout.LayoutParams(-2, dp(44)));
 
-        quoteInput = edit("Texte ou citation manuelle");
-        quoteInput.setText(quote);
-        extraCard.addView(quoteInput);
-        watermarkInput = edit("Watermark (@pseudo)");
-        watermarkInput.setText(watermark);
-        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, dp(44));
-        wp.topMargin = dp(8);
-        extraCard.addView(watermarkInput, wp);
+        content.addView(lyricsEmptyState, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        quoteInput.setOnFocusChangeListener((z, f) -> {
-            if (!f) {
-                quote = quoteInput.getText().toString();
-                saveSession();
-                visualizerView.invalidate();
-                updateKaraokeLinesView();
+        lyricsPageRoot.addView(content, new FrameLayout.LayoutParams(-1, -1));
+
+        populateLyricsPage();
+        updateLyricsPageBackground();
+
+        return lyricsPageRoot;
+    }
+
+    private void populateLyricsPage() {
+        if (lyricsFullContainer == null) return;
+        lyricsFullContainer.removeAllViews();
+        lyricsLineViews.clear();
+        currentLyricsActiveIndex = -1;
+
+        if (lyricsTrackTitleText != null) {
+            String titleStr = (currentTrackTitle != null && !currentTrackTitle.trim().isEmpty()) ? currentTrackTitle : "Paroles";
+            lyricsTrackTitleText.setText(titleStr);
+        }
+        if (lyricsTrackArtistText != null) {
+            String artistStr = (currentTrackArtist != null && !currentTrackArtist.trim().isEmpty()) ? currentTrackArtist : "Studio Pro";
+            lyricsTrackArtistText.setText(artistStr);
+        }
+
+        if (lyricsList.isEmpty()) {
+            if (lyricsEmptyState != null) lyricsEmptyState.setVisibility(View.VISIBLE);
+            if (lyricsFullScrollView != null) lyricsFullScrollView.setVisibility(View.GONE);
+            return;
+        }
+
+        if (lyricsEmptyState != null) lyricsEmptyState.setVisibility(View.GONE);
+        if (lyricsFullScrollView != null) lyricsFullScrollView.setVisibility(View.VISIBLE);
+
+        for (int i = 0; i < lyricsList.size(); i++) {
+            final LyricLine line = lyricsList.get(i);
+
+            TextView lineTv = new TextView(this);
+            lineTv.setText(line.text != null && !line.text.trim().isEmpty() ? line.text : "♪");
+            lineTv.setTextSize(19);
+            lineTv.setTextColor(0x66FFFFFF);
+            lineTv.setAlpha(0.40f);
+            lineTv.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            lineTv.setPadding(dp(16), dp(12), dp(16), dp(12));
+            lineTv.setGravity(Gravity.CENTER);
+            lineTv.setClickable(true);
+            lineTv.setFocusable(true);
+
+            // Clic sur une ligne pour caler la lecture à cet instant
+            lineTv.setOnClickListener(v -> {
+                MediaPlayer p = player != null ? player : MusicPlayerManager.getInstance(this).getPlayer();
+                if (p != null) {
+                    try {
+                        p.seekTo((int) line.startMs);
+                    } catch (Exception ignored) {}
+                }
+            });
+
+            lyricsLineViews.add(lineTv);
+            lyricsFullContainer.addView(lineTv);
+        }
+    }
+
+    private void updateLyricsPage(long curMs) {
+        if (lyricsFullContainer == null) return;
+
+        if (lyricsLineViews.size() != lyricsList.size()) {
+            populateLyricsPage();
+        }
+
+        if (lyricsList.isEmpty() || lyricsLineViews.isEmpty()) return;
+
+        int activeIndex = -1;
+        for (int i = 0; i < lyricsList.size(); i++) {
+            LyricLine line = lyricsList.get(i);
+            if (curMs >= line.startMs && curMs <= line.endMs) {
+                activeIndex = i;
+                break;
+            } else if (curMs > line.endMs) {
+                activeIndex = i;
             }
-        });
-        watermarkInput.setOnFocusChangeListener((z, f) -> {
-            if (!f) {
-                watermark = watermarkInput.getText().toString();
-                saveSession();
-                visualizerView.invalidate();
+        }
+
+        if (activeIndex == currentLyricsActiveIndex) return;
+        currentLyricsActiveIndex = activeIndex;
+
+        for (int i = 0; i < lyricsLineViews.size(); i++) {
+            TextView tv = lyricsLineViews.get(i);
+            if (i == activeIndex) {
+                tv.setTextColor(0xFF22D3EE);
+                tv.setTextSize(25);
+                tv.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+                tv.setAlpha(1.0f);
+            } else if (Math.abs(i - activeIndex) == 1) {
+                tv.setTextColor(Color.WHITE);
+                tv.setTextSize(20);
+                tv.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+                tv.setAlpha(0.65f);
+            } else {
+                tv.setTextColor(0x66FFFFFF);
+                tv.setTextSize(18);
+                tv.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+                tv.setAlpha(0.35f);
             }
-        });
+        }
 
-        c.addView(extraCard);
+        if (activeIndex >= 0 && activeIndex < lyricsLineViews.size() && lyricsFullScrollView != null) {
+            final TextView activeTv = lyricsLineViews.get(activeIndex);
+            lyricsFullScrollView.post(() -> {
+                int scrollY = activeTv.getTop() - (lyricsFullScrollView.getHeight() / 2) + (activeTv.getHeight() / 2);
+                lyricsFullScrollView.smoothScrollTo(0, Math.max(0, scrollY));
+            });
+        }
+    }
 
-        updateKaraokeLinesView();
-
-        s.addView(c);
-        page.addView(s);
-        return page;
+    private void updateLyricsPageBackground() {
+        if (lyricsBackgroundView == null) return;
+        if (backgroundBitmap != null) {
+            lyricsBackgroundView.setImageBitmap(backgroundBitmap);
+            lyricsBackgroundView.setVisibility(View.VISIBLE);
+            if (lyricsResetPhotoBtn != null) lyricsResetPhotoBtn.setVisibility(View.VISIBLE);
+        } else if (currentAudioCoverBitmap != null) {
+            lyricsBackgroundView.setImageBitmap(currentAudioCoverBitmap);
+            lyricsBackgroundView.setVisibility(View.VISIBLE);
+            if (lyricsResetPhotoBtn != null) lyricsResetPhotoBtn.setVisibility(View.GONE);
+        } else {
+            lyricsBackgroundView.setImageDrawable(null);
+            lyricsBackgroundView.setVisibility(View.GONE);
+            if (lyricsResetPhotoBtn != null) lyricsResetPhotoBtn.setVisibility(View.GONE);
+        }
     }
 
     private LinearLayout createAudioPage() {
@@ -1621,23 +1616,23 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         return page;
     }
 
-    private LinearLayout createExportPage() {
+    private LinearLayout createSettingsPage() {
         LinearLayout page = page();
         ScrollView s = scroll();
         LinearLayout c = vertical();
         c.setPadding(dp(16), dp(12), dp(16), dp(28));
 
-        // En-tête Export
-        LinearLayout exHead = row();
-        exHead.setGravity(Gravity.CENTER_VERTICAL);
-        exHead.addView(title("Export", 16, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
-        exHead.addView(badge("PRO • GPU H.264", 0x1F22D3EE, 0xFF22D3EE, false));
-        c.addView(exHead);
+        // En-tête Paramètres
+        LinearLayout setHead = row();
+        setHead.setGravity(Gravity.CENTER_VERTICAL);
+        setHead.addView(title("Paramètres", 17, Color.WHITE), new LinearLayout.LayoutParams(0, -2, 1));
+        setHead.addView(badge("STUDIO PRO • v2.9.3", 0x1F22D3EE, 0xFF22D3EE, false));
+        c.addView(setHead);
         c.addView(gap(16));
 
         // 1. Section Formats & Ratios (9:16, 1:1, 16:9)
         TextView formatSectionHeader = new TextView(this);
-        formatSectionHeader.setText("FORMAT & RATIO");
+        formatSectionHeader.setText("FORMAT & EXPORTATION VIDÉO");
         formatSectionHeader.setTextSize(11);
         formatSectionHeader.setLetterSpacing(0.12f);
         formatSectionHeader.setTextColor(0xFF9CA3AF);
@@ -1931,12 +1926,140 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         c.addView(renderCard);
         c.addView(gap(18));
 
-        // 4. Dossier de Sauvegarde
+        // ==========================================
+        // 2. SECTION VISUALISEUR & EFFETS
+        // ==========================================
+        TextView visualSectionHeader = new TextView(this);
+        visualSectionHeader.setText("VISUALISEUR & EFFETS");
+        visualSectionHeader.setTextSize(11);
+        visualSectionHeader.setLetterSpacing(0.12f);
+        visualSectionHeader.setTextColor(0xFF9CA3AF);
+        visualSectionHeader.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        c.addView(visualSectionHeader);
+        c.addView(gap(8));
+
+        LinearLayout visualCard = card(0x0AFFFFFF, 0x14FFFFFF, 20);
+        visualCard.setPadding(dp(14), dp(12), dp(14), dp(12));
+
+        LinearLayout shakeRow = row();
+        shakeRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView shakeLabel = new TextView(this);
+        shakeLabel.setText("Secousse au rythme (Beat Shake)");
+        shakeLabel.setTextColor(Color.WHITE);
+        shakeLabel.setTextSize(13);
+        shakeRow.addView(shakeLabel, new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button shakeToggleBtn = button(beatShakeEnabled ? "Activé" : "Désactivé", beatShakeEnabled ? 0x2622D3EE : 0x14FFFFFF, beatShakeEnabled ? 0xFF22D3EE : 0xFF9CA3AF, 0x33FFFFFF);
+        shakeToggleBtn.setTextSize(12);
+        shakeToggleBtn.setPadding(dp(12), dp(6), dp(12), dp(6));
+        shakeToggleBtn.setOnClickListener(v -> {
+            beatShakeEnabled = !beatShakeEnabled;
+            shakeToggleBtn.setText(beatShakeEnabled ? "Activé" : "Désactivé");
+            shakeToggleBtn.setTextColor(beatShakeEnabled ? 0xFF22D3EE : 0xFF9CA3AF);
+            shape(shakeToggleBtn, beatShakeEnabled ? 0x2622D3EE : 0x14FFFFFF, dp(10), 0x33FFFFFF);
+            saveSession();
+            Toast.makeText(this, beatShakeEnabled ? "Secousse au rythme activée" : "Secousse au rythme désactivée", Toast.LENGTH_SHORT).show();
+        });
+        shakeRow.addView(shakeToggleBtn, new LinearLayout.LayoutParams(-2, dp(36)));
+        visualCard.addView(shakeRow);
+        c.addView(visualCard);
+        c.addView(gap(16));
+
+        // ==========================================
+        // 3. SECTION INTELLIGENCE ARTIFICIELLE
+        // ==========================================
+        TextView aiSectionHeader = new TextView(this);
+        aiSectionHeader.setText("CLÉ API & ASSISTANT IA");
+        aiSectionHeader.setTextSize(11);
+        aiSectionHeader.setLetterSpacing(0.12f);
+        aiSectionHeader.setTextColor(0xFF9CA3AF);
+        aiSectionHeader.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        c.addView(aiSectionHeader);
+        c.addView(gap(8));
+
+        LinearLayout aiCard = card(0x0AFFFFFF, 0x14FFFFFF, 20);
+        aiCard.setPadding(dp(14), dp(14), dp(14), dp(14));
+
+        TextView aiDesc = subtitle("Entrez votre clé API Groq ou Gemini pour activer la détection intelligente, l'assistant chat et la traduction.");
+        aiCard.addView(aiDesc);
+        aiCard.addView(gap(10));
+
+        EditText settingsApiKeyInput = edit("Clé API (Groq / Gemini)");
+        String currentKey = getSharedPreferences("app_prefs", MODE_PRIVATE).getString("groq_api_key", "");
+        if (!currentKey.isEmpty()) settingsApiKeyInput.setText(currentKey);
+        aiCard.addView(settingsApiKeyInput);
+        aiCard.addView(gap(10));
+
+        Button saveKeyBtn = button("Enregistrer la clé API", 0x2222D3EE, 0xFF22D3EE, 0x4D22D3EE);
+        saveKeyBtn.setTextSize(12);
+        saveKeyBtn.setPadding(dp(16), dp(8), dp(16), dp(8));
+        saveKeyBtn.setOnClickListener(v -> {
+            String k = settingsApiKeyInput.getText().toString().trim();
+            getSharedPreferences("app_prefs", MODE_PRIVATE).edit().putString("groq_api_key", k).apply();
+            Toast.makeText(this, "Clé API enregistrée avec succès !", Toast.LENGTH_SHORT).show();
+        });
+        aiCard.addView(saveKeyBtn, new LinearLayout.LayoutParams(-1, dp(42)));
+        c.addView(aiCard);
+        c.addView(gap(16));
+
+        // ==========================================
+        // 4. SECTION CACHE & SESSION
+        // ==========================================
+        TextView storageHeader = new TextView(this);
+        storageHeader.setText("STOCKAGE & CACHE");
+        storageHeader.setTextSize(11);
+        storageHeader.setLetterSpacing(0.12f);
+        storageHeader.setTextColor(0xFF9CA3AF);
+        storageHeader.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        c.addView(storageHeader);
+        c.addView(gap(8));
+
+        LinearLayout storageCard = card(0x0AFFFFFF, 0x14FFFFFF, 20);
+        storageCard.setPadding(dp(14), dp(14), dp(14), dp(14));
+
+        Button clearCacheBtn = secondary("Vider le cache temporaire");
+        clearCacheBtn.setOnClickListener(v -> {
+            try {
+                File cacheDir = getCacheDir();
+                if (cacheDir != null && cacheDir.isDirectory()) {
+                    File[] files = cacheDir.listFiles();
+                    if (files != null) {
+                        for (File f : files) f.delete();
+                    }
+                }
+                Toast.makeText(this, "Cache vidé avec succès.", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Erreur vidage cache.", Toast.LENGTH_SHORT).show();
+            }
+        });
+        storageCard.addView(clearCacheBtn, new LinearLayout.LayoutParams(-1, dp(42)));
+        storageCard.addView(gap(8));
+
+        Button resetDefaultsBtn = secondary("Réinitialiser les paramètres par défaut");
+        resetDefaultsBtn.setOnClickListener(v -> {
+            beatShakeEnabled = true;
+            exportFps = 30;
+            formatW = 1080;
+            formatH = 1920;
+            updateFormatSelection(formatW, formatH);
+            updateFpsSelection(exportFps);
+            saveSession();
+            Toast.makeText(this, "Paramètres réinitialisés.", Toast.LENGTH_SHORT).show();
+        });
+        storageCard.addView(resetDefaultsBtn, new LinearLayout.LayoutParams(-1, dp(42)));
+        c.addView(storageCard);
+        c.addView(gap(16));
+
+        // 5. Dossier de Sauvegarde & À propos
         LinearLayout note = card(0x0AFFFFFF, 0x14FFFFFF, 20);
         note.setPadding(dp(16), dp(14), dp(16), dp(14));
         note.addView(section("DESTINATION DES FICHIERS"));
         note.addView(gap(6));
         note.addView(subtitle("• Vidéos MP4 → Galerie / Dossier Films/StudioPro\n• Images Cover → Galerie / Dossier Images/StudioPro\n• Paroles LRC → Documents/StudioPro"));
+        note.addView(gap(12));
+        note.addView(section("À PROPOS DE STUDIO PRO"));
+        note.addView(gap(6));
+        note.addView(subtitle("Studio Pro v2.9.3\nÉditeur audio avec visualiseur d'ondes, synchronisation karaoké et export MP4 matériel."));
         c.addView(note);
 
         s.addView(c);
@@ -1970,6 +2093,11 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
             if (embeddedAudioBrowser != null) {
                 embeddedAudioBrowser.checkPermissionAndScan();
             }
+        } else if (i == 2) {
+            populateLyricsPage();
+            updateLyricsPageBackground();
+            long curMs = player != null ? player.getCurrentPosition() : (MusicPlayerManager.getInstance(this).getPlayer() != null ? MusicPlayerManager.getInstance(this).getPlayer().getCurrentPosition() : 0);
+            updateLyricsPage(curMs);
         } else if (i == 4) {
             updateAiUiStates();
         } else if (i == 3) {
@@ -2233,6 +2361,9 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     }
 
     private void updateKaraokeLinesView() {
+        long curMs = player != null ? player.getCurrentPosition() : (MusicPlayerManager.getInstance(this).getPlayer() != null ? MusicPlayerManager.getInstance(this).getPlayer().getCurrentPosition() : 0);
+        updateLyricsPage(curMs);
+
         if (karaokeActiveLine == null) return;
         if (lyricsHeaderBadge != null) {
             lyricsHeaderBadge.setText(lyricsList.isEmpty() ? "LRC • INACTIF" : "LRC • 98% SYNC");
@@ -2242,7 +2373,6 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
         }
 
         if (!lyricsList.isEmpty()) {
-            long curMs = player != null ? player.getCurrentPosition() : 0;
             int activeIndex = 0;
             for (int i = 0; i < lyricsList.size(); i++) {
                 LyricLine line = lyricsList.get(i);
@@ -4156,31 +4286,7 @@ public class MainActivity extends AppCompatActivity implements MusicPlayerManage
     }
 
     private void openFullScreenLyrics() {
-        MediaPlayer activePlayer = player != null ? player : MusicPlayerManager.getInstance(this).getPlayer();
-        if (activePlayer == null) {
-            Toast.makeText(this, "Veuillez d'abord charger ou lancer un audio.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        List<LyricLine> lyricsToDisplay = this.lyricsList;
-        if (currentMusicPlayerDialog != null && currentMusicPlayerDialog.getLyricsList() != null && !currentMusicPlayerDialog.getLyricsList().isEmpty()) {
-            lyricsToDisplay = currentMusicPlayerDialog.getLyricsList();
-        }
-
-        String titleToDisplay = currentTrackTitle;
-        String artistToDisplay = currentTrackArtist;
-        AudioBrowserDialog.AudioTrackItem curTrack = MusicPlayerManager.getInstance(this).getCurrentTrack();
-        if (curTrack != null) {
-            if (curTrack.title != null && !curTrack.title.trim().isEmpty()) {
-                titleToDisplay = curTrack.title;
-            }
-            if (curTrack.artist != null && !curTrack.artist.trim().isEmpty()) {
-                artistToDisplay = curTrack.artist;
-            }
-        }
-
-        FullScreenLyricsDialog dialog = new FullScreenLyricsDialog(this, activePlayer, lyricsToDisplay, titleToDisplay, artistToDisplay);
-        dialog.show();
+        showPage(2);
     }
 
     public void openMusicPlayer() {
